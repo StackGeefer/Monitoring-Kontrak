@@ -1,2 +1,2 @@
-/* Token GitHub Owner Utama — TERENKRIPSI. Diisi otomatis saat Setup awal. */
-window.MK_ADMIN = null;
+/* Token GitHub Owner Utama untuk penyimpanan oleh Writer — TERENKRIPSI (hanya Owner/Writer yang bisa membuka) */
+window.MK_ADMIN = {"tok":"MWK1.9iskuHB18/Z/7KKpSu7KAbARPIZlO5IARn1JqjAfp6My15qKc6vLHt6ngCMARqejWnJCv5I6n6bJZkgIY9n11Jg2wuu66C+f3rWwLDAQBVYFMAD5qZa+c9h+/wjnapdSVlsgtnrxSt53r4fsYsNPwJhJpJKFfb5GJb+41KezJmUMg+nlvqtTtMw0hUo1Kgo4lFQxfzs=","by":"Gerald.samosir","at":"2026-11-10T07:20:40.692Z"};
