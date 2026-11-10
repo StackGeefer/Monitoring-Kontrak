@@ -10,13 +10,17 @@ Website untuk memantau seluruh kontrak / OA: **masa berlaku & jatuh tempo**, **s
 
 ## Setup awal (sekali saja, oleh Owner)
 
+Akun Owner Utama **Gerald.samosir** sudah dibuat (password sama dengan website Material Warehouse).
+
 1. Repo → **Settings → Pages** → *Deploy from a branch* → `main` / `(root)` → Save.
-2. Buat token GitHub: https://github.com/settings/personal-access-tokens/new
+2. Login di website sebagai Gerald.samosir.
+3. Buat token GitHub: https://github.com/settings/personal-access-tokens/new
+   - **Expiration** → *Custom* → ±1 tahun
    - **Repository access** → *Only select repositories* → `Monitoring-Kontrak`
    - **Permissions → Contents** → *Read and write* → **Generate token**
-3. Buka website → muncul halaman **Setup awal** → isi username Owner, password, dan token → **Buat akun Owner**.
+4. Di website: **Pengaturan → Koneksi GitHub** → tempel token → **Simpan & Tes**. Selama token belum diisi, website hanya bisa dilihat (belum bisa menyimpan).
 
-Setelah itu halaman Setup tidak muncul lagi; website langsung memakai halaman **Login**.
+Token yang kedaluwarsa cukup diganti di tempat yang sama; Writer otomatis ikut memakai token baru.
 
 ## Peran pengguna
 

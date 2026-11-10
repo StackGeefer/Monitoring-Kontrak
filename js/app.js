@@ -68,7 +68,7 @@
     arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
   };
 
-  var APP_VERSION = '20261110a'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261110b'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Monitoring-Kontrak';
   var HERO = [{ path: 'assets/hero/pertamina-1-kilang.jpg', pos: '74% 40%' }, { path: 'assets/hero/pertamina-2-gudang.jpg', pos: '30% 60%' }];
   var ROLE_LABEL = { owner: 'Owner Utama', writer: 'Writer', viewer: 'Viewer' };
@@ -438,6 +438,11 @@
     else if (r.name === 'edit') renderForm(r.arg);
     else if (r.name === 'import') renderImport();
     else if (r.name === 'pengaturan') renderSettings();
+    if (canWrite() && !GH.hasToken()) {
+      view.insertAdjacentHTML('afterbegin', '<div class="card card-pad pending-banner"><div><b>Website belum terhubung ke GitHub — data belum bisa disimpan.</b><div class="small muted">' +
+        (isOwner() ? 'Isi token GitHub sekali di Pengaturan → Koneksi GitHub. Setelah itu Writer otomatis ikut bisa menyimpan.' : 'Minta Owner Utama mengisi token GitHub di Pengaturan → Koneksi GitHub.') + '</div></div>' +
+        (isOwner() && r.name !== 'pengaturan' ? '<a class="btn primary" href="#/pengaturan">Hubungkan GitHub</a>' : '') + '</div>');
+    }
     renderSide();
     window.scrollTo(0, 0);
   }
