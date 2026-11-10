@@ -1,0 +1,9 @@
+# Jangan pernah commit file Excel mentah (data kontrak / SAP)
+*.xlsx
+*.XLSX
+*.xls
+*.xlsm
+*.csv
+.DS_Store
+Thumbs.db
+node_modules/
