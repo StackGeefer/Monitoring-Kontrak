@@ -69,7 +69,7 @@
     arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
   };
 
-  var APP_VERSION = '20261110f'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261110g'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Monitoring-Kontrak';
   var HERO = [{ path: 'assets/hero/pertamina-1-kilang.jpg', pos: '74% 40%' }, { path: 'assets/hero/pertamina-2-gudang.jpg', pos: '30% 60%' }];
   var ROLE_LABEL = { owner: 'Owner Utama', writer: 'Writer', viewer: 'Viewer' };
@@ -1257,62 +1257,106 @@
   // ================= Pengaturan =================
   function renderSettings() {
     var st = settings(), owner = isOwner(), w = canWrite();
-    var acc = '<div class="card card-pad"><h3 class="section-title">Akun saya</h3><div class="toolbar"><div class="side-user" style="background:var(--surface-2);color:var(--ink);margin:0"><div class="avatar" style="color:#fff">' + esc(me().charAt(0).toUpperCase()) + '</div><div><b>' + esc(me()) + '</b><div class="small muted">' + roleLabel(role()) + '</div></div></div></div>' +
-      (w ? '<form id="pwForm" class="toolbar" style="margin-top:14px" autocomplete="off"><input class="input" type="password" name="old" placeholder="Password lama" required autocomplete="current-password"><input class="input" type="password" name="pw" placeholder="Password baru (min. 6)" required minlength="6" autocomplete="new-password"><input class="input" type="password" name="pw2" placeholder="Ulangi password baru" required autocomplete="new-password"><button class="btn primary" type="submit">Ganti password</button></form>'
-        : '<p class="small muted" style="margin:12px 0 0">Untuk ganti password, hubungi Owner Utama.</p>') + '</div>';
+    var sec = function (title, body, id) { return '<div class="card card-pad"' + (id ? ' id="' + id + '"' : '') + '><h4 class="section-title">' + title + '</h4>' + body + '</div>'; };
+    var top = '<div class="card card-pad toolbar"><div><div class="small muted">Masuk sebagai</div><b style="font-size:16px">' + esc(me()) + '</b> ' + roleBadge(role()) + '</div><span class="spacer"></span><button class="btn" data-act="logout">Keluar</button></div>';
+    var pwBox = '<div><div style="font-weight:700;margin-bottom:6px">Ganti password saya</div><form id="pwForm" class="toolbar" autocomplete="off">' +
+      '<input class="input sm" type="password" name="pw" placeholder="Password baru" required minlength="6" autocomplete="new-password">' +
+      '<input class="input sm" type="password" name="pw2" placeholder="Ulangi password baru" required autocomplete="new-password">' +
+      '<button class="btn sm primary" type="submit">Simpan</button></form></div>';
 
     var users = '';
     if (owner) {
       var rows = S.users.map(function (u) {
-        var self = S.user && u.id === S.user.id;
-        return '<tr data-uid="' + esc(u.id) + '"><td><b>' + esc(u.name) + '</b>' + (self ? ' <span class="small muted">(Anda)</span>' : '') + '</td><td>' + (u.role === 'owner' ? roleBadge('owner') : '<select class="select sm" data-urole>' + ['writer', 'viewer'].map(function (r) { return '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + roleLabel(r) + '</option>'; }).join('') + '</select>') + '</td>' +
-          '<td>' + (u.ak ? '<span class="badge ok">bisa simpan</span>' : u.role === 'writer' ? '<span class="badge warn">perlu atur password</span>' : '<span class="small muted">baca saja</span>') + '</td>' +
-          '<td>' + (u.role === 'owner' ? '' : '<input class="input sm" type="password" data-upw placeholder="password baru (opsional)" autocomplete="new-password" style="width:190px">') + '</td>' +
-          '<td class="nowrap">' + (u.role === 'owner' ? '' : '<button class="btn sm" data-act="user-save">Simpan</button> <button class="icon-btn" data-act="user-del" title="Hapus pengguna">' + ICON.trash + '</button>') + '</td></tr>';
+        var self = S.user && u.id === S.user.id, warn = u.role === 'writer' && !u.ak ? ' <span class="badge warn" title="Isi password orang tsb lalu Simpan agar bisa menyimpan data">belum bisa simpan</span>' : '';
+        var ctl = self || u.role === 'owner' ? '' :
+          '<select class="select sm" data-urole>' + ['writer', 'viewer'].map(function (r) { return '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + roleLabel(r) + '</option>'; }).join('') + '</select>' +
+          '<input class="input sm" type="password" data-upw placeholder="' + (u.role === 'writer' && u.ak ? 'Password baru (opsional)' : 'Password orang tsb (wajib)') + '" autocomplete="new-password" style="width:200px">' +
+          '<button class="btn sm" data-act="user-save">Simpan</button><button class="btn sm danger" data-act="user-del" title="Hapus pengguna">' + ICON.trash + '</button>';
+        return '<tr data-uid="' + esc(u.id) + '"><td><b>' + esc(u.name) + '</b>' + (self ? ' <span class="badge ro">Anda</span>' : '') + '</td><td>' + roleBadge(u.role) + warn + '</td>' +
+          '<td class="right"><div class="toolbar" style="justify-content:flex-end">' + ctl + '</div></td></tr>';
       }).join('');
-      users = '<div class="card card-pad"><h3 class="section-title">Pengguna</h3>' +
-        '<p class="small muted" style="margin:0 0 12px;line-height:1.6"><b>Writer</b> (kontributor): tambah/edit kontrak, realisasi, amandemen, dokumen & import. <b>Viewer</b>: hanya melihat & export. Hanya Owner Utama yang bisa menghapus kontrak & mengelola pengguna. ' +
-        'Writer menyimpan memakai token GitHub Owner yang tersimpan terenkripsi — Writer <b>tidak perlu akun GitHub</b>.</p>' +
-        '<div class="table-wrap" style="box-shadow:none"><table class="grid"><thead><tr><th>Pengguna</th><th>Peran</th><th>Akses simpan</th><th>Atur password</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-        '<form id="addUser" class="toolbar" style="margin-top:14px" autocomplete="off"><input class="input" name="u" placeholder="Username baru (mis. nama.pengguna)" required><select class="select" name="role"><option value="writer">Writer</option><option value="viewer">Viewer</option></select>' +
-        '<input class="input" type="password" name="pw" placeholder="Password awal (min. 6)" required minlength="6" autocomplete="new-password"><button class="btn primary" type="submit">' + ICON.plus + ' Tambah pengguna</button></form>' +
-        '<p class="small muted" style="margin:8px 0 0">Berikan username & password awal ke orang tersebut. Writer bisa mengganti password sendiri setelah login.</p></div>';
+      users = sec('Pengguna &amp; Login',
+        '<div class="table-wrap"><table class="grid"><thead><tr><th>Username</th><th>Peran</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+        '<div class="set-2col">' +
+        '<div><div style="font-weight:700;margin-bottom:6px">Tambah pengguna</div><form id="addUser" class="toolbar" autocomplete="off">' +
+        '<input class="input sm" name="u" placeholder="Username" required autocomplete="off">' +
+        '<input class="input sm" type="password" name="pw" placeholder="Password" required minlength="6" autocomplete="new-password">' +
+        '<select class="select sm" name="role"><option value="writer">Writer (kontributor — tambah/edit kontrak &amp; upload data)</option><option value="viewer">Viewer (lihat &amp; export saja)</option></select>' +
+        '<button class="btn sm primary" type="submit">Tambah</button></form></div>' + pwBox + '</div>' +
+        '<div class="small muted" style="margin-top:10px;line-height:1.6"><b>Owner Utama</b>: atur token GitHub &amp; pengguna, hapus kontrak. <b>Writer</b> (kontributor): tambah/edit kontrak, realisasi, amandemen, dokumen, tindak lanjut OA, upload data SAP &amp; progres — penyimpanan memakai token Owner Utama yang tersimpan terenkripsi, jadi Writer tidak perlu akun GitHub. ' +
+        '<b>Viewer</b>: lihat semua halaman &amp; export Excel. Untuk Writer, isi password orang tersebut (lama atau baru) agar akses simpannya terkunci untuk dia. Password minimal 6 karakter.</div>');
+    } else if (w) {
+      users = sec('Akun saya', pwBox);
     }
 
-    var ghCard = owner ? '<div class="card card-pad"><h3 class="section-title">Koneksi GitHub</h3>' +
-      '<div class="small" style="margin-bottom:10px">Repo: <span class="mono">' + esc(GH.repo()) + '</span> · Status: ' + (GH.hasToken() ? '<span class="badge ok">terhubung</span>' : '<span class="badge bad">belum terhubung</span>') + '</div>' +
-      '<form id="tokForm" class="toolbar" autocomplete="off"><input class="input masked" name="tok" placeholder="Token GitHub baru (github_pat_…)" style="min-width:300px" required><button class="btn primary" type="submit">Simpan & Tes</button></form>' +
-      '<p class="small muted" style="margin:10px 0 0;line-height:1.6">Ganti token bila sudah kedaluwarsa: <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">buat token</a> → <i>Only select repositories</i>: ' + esc(GH.repo().split('/')[1]) + ' → <b>Contents: Read and write</b>. Token otomatis dibagikan terenkripsi ke semua Writer.</p></div>' : '';
-
-    var remind = '<div class="card card-pad"><h3 class="section-title">Pengingat & daftar pilihan</h3>' +
-      (owner ? '<form id="setForm" autocomplete="off"><div class="fleet-form">' +
-        fld('Segera berakhir (hari)', '<input class="input" type="number" name="warn" min="1" value="' + st.warn + '">') + fld('Kritis (hari)', '<input class="input" type="number" name="crit" min="1" value="' + st.crit + '">') +
-        fld('Peringatan serapan nilai (%)', '<input class="input" type="number" name="absorb" min="1" max="200" value="' + st.absorbWarn + '">') + '<div></div>' +
-        fld('Jenis kontrak (satu per baris)', '<textarea class="input" name="jenis" rows="6">' + esc(st.jenis.join('\n')) + '</textarea>') +
-        fld('Fungsi pengguna (satu per baris)', '<textarea class="input" name="fungsi" rows="6">' + esc(st.fungsi.join('\n')) + '</textarea>') +
-        '</div><div class="fleet-actions" style="margin-top:12px"><button class="btn primary" type="submit">Simpan pengaturan</button></div></form>'
-        : '<div class="small" style="line-height:1.8">Segera berakhir ≤ <b>' + st.warn + '</b> hari · Kritis ≤ <b>' + st.crit + '</b> hari · Peringatan serapan ≥ <b>' + st.absorbWarn + '%</b></div>') + '</div>';
-
-    var wh = warehouseUrl();
-    var whCard = '<div class="card card-pad"><h3 class="section-title">Integrasi Material Warehouse</h3>' +
-      '<p class="small muted" style="margin:0 0 12px;line-height:1.6">Kedua website terhubung lewat tombol <b>Material di Warehouse</b> di detail OA (membuka daftar material OA tersebut), dan <b>Import → Ambil data ME3N Warehouse</b> untuk menarik daftar OA tanpa upload ulang.</p>' +
-      (owner ? '<form id="whForm" class="toolbar" autocomplete="off"><input class="input" name="url" value="' + esc(st.warehouseUrl || '') + '" placeholder="' + esc(defaultWarehouseUrl()) + '" style="min-width:320px"><button class="btn primary" type="submit">Simpan URL</button></form>' : '') +
-      '<div class="toolbar" style="margin-top:10px"><a class="btn" href="' + esc(wh) + '" target="_blank" rel="noopener">' + ICON.ext + ' Buka ' + esc(wh.replace(/^https?:\/\//, '')) + '</a>' + (w ? '<a class="btn" href="#/import">' + ICON.link + ' Ambil data ME3N</a>' : '') + '</div></div>';
-
-    var audit = (S.D.audit || []);
-    var auditCard = w ? '<div class="card card-pad"><h3 class="section-title">History hapus data</h3>' + (audit.length ? '<div class="table-wrap" style="box-shadow:none;max-height:340px"><table class="grid"><thead><tr><th>Waktu</th><th>Oleh</th><th>Data</th><th>Keterangan</th></tr></thead><tbody>' +
-      audit.slice(0, 200).map(function (a) { return '<tr><td class="nowrap small">' + fmtDateTime(a.at) + '</td><td>' + esc(a.by) + '</td><td><span class="badge">' + esc(a.what) + '</span></td><td class="small">' + esc(a.label) + '</td></tr>'; }).join('') + '</tbody></table></div>'
-      : '<p class="small muted" style="margin:0">Belum ada data yang dihapus.</p>') + '</div>' : '';
+    var ghCard = owner ? sec('Koneksi GitHub',
+      '<p class="muted small" style="margin-top:0">Agar data yang disimpan langsung tampil untuk semua pengguna.</p>' +
+      '<div class="toolbar" style="margin-bottom:10px"><span>Status:</span>' + (GH.hasToken() ? '<span class="badge ok">Terhubung ke ' + esc(GH.repo()) + '</span>' : '<span class="badge warn">Belum terhubung</span>') + '</div>' +
+      '<ol class="steps small"><li>Buka <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub › Fine-grained token baru</a> (login sebagai pemilik repo).</li>' +
+      '<li>Isi <b>Token name</b> bebas (mis. "Monitoring Kontrak"), <b>Expiration</b> → <i>Custom</i> ±1 tahun.</li>' +
+      '<li><b>Repository access</b> → <i>Only select repositories</i> → pilih <b>' + esc(GH.repo().split('/')[1]) + '</b>.</li>' +
+      '<li><b>Permissions › Repository permissions › Contents</b> → <b>Read and write</b>.</li>' +
+      '<li>Klik <b>Generate token</b>, salin token (diawali <span class="mono">github_pat_</span>), tempel di bawah lalu klik <b>Simpan &amp; Tes</b>.</li></ol>' +
+      '<form id="tokForm" class="toolbar" style="margin-top:8px" autocomplete="off"><input class="input sm mono masked" name="tok" style="flex:1;min-width:260px" placeholder="' + (GH.hasToken() ? 'Token tersimpan — isi untuk mengganti' : 'github_pat_…') + '" required autocomplete="off" spellcheck="false" data-lpignore="true" data-1p-ignore>' +
+      '<button class="btn sm primary" type="submit">Simpan &amp; Tes</button></form>' +
+      '<div class="small muted" style="margin-top:8px">Hanya <b>Owner Utama</b> yang mengisi token. Token otomatis dibagikan terenkripsi ke semua Writer (mereka tidak pernah melihat token).</div>') : '';
 
     var cl = st.clients || {};
-    var sapCard = '<div class="card card-pad"><h3 class="section-title">Monitoring SAP</h3>' +
-      (owner ? '<form id="sapSetForm" autocomplete="off"><div class="fleet-form">' +
-        fld('Kurs USD → IDR (untuk total ekuivalen)', '<input class="input" name="kurs" inputmode="decimal" value="' + esc(nf0.format(+st.kurs || 16000)) + '">') + '<div></div>' +
-        fld('Nama Client 100', '<input class="input" name="c100" value="' + esc(cl['100'] || 'Pertamina EP') + '">') + fld('Nama Client 180', '<input class="input" name="c180" value="' + esc(cl['180'] || 'PHE') + '">') +
-        '</div><div class="fleet-actions" style="margin-top:12px"><button class="btn primary" type="submit">Simpan</button></div></form>'
-        : '<div class="small" style="line-height:1.8">Kurs USD: <b>' + nf0.format(+st.kurs || 16000) + '</b> · Client 100: <b>' + esc(cl['100'] || 'Pertamina EP') + '</b> · Client 180: <b>' + esc(cl['180'] || 'PHE') + '</b></div>') + '</div>';
-    view.innerHTML = '<div class="mk-settings">' + acc + users + ghCard + sapCard + whCard + remind + auditCard + '</div>' +
+    var sapCard = sec('Monitoring SAP', owner ?
+      '<form id="sapSetForm" autocomplete="off"><div class="set-grid">' +
+      fld('Kurs USD → IDR', '<input class="input" name="kurs" inputmode="decimal" value="' + esc(nf0.format(+st.kurs || 16000)) + '">') +
+      fld('Nama Client 100', '<input class="input" name="c100" value="' + esc(cl['100'] || 'Pertamina EP') + '">') +
+      fld('Nama Client 180', '<input class="input" name="c180" value="' + esc(cl['180'] || 'PHE') + '">') +
+      '</div><div class="small muted" style="margin-top:6px">Kurs dipakai untuk total gabungan IDR + USD di Dashboard, Kontrak OA &amp; PO/RO.</div>' +
+      '<div class="toolbar" style="margin-top:12px"><button class="btn sm primary" type="submit">Simpan</button></div></form>'
+      : '<div class="small" style="line-height:1.8">Kurs USD: <b>' + nf0.format(+st.kurs || 16000) + '</b> · Client 100: <b>' + esc(cl['100'] || 'Pertamina EP') + '</b> · Client 180: <b>' + esc(cl['180'] || 'PHE') + '</b></div>');
+
+    var remind = sec('Pengingat &amp; daftar pilihan', owner ?
+      '<form id="setForm" autocomplete="off"><div class="set-grid">' +
+      fld('Segera berakhir (hari)', '<input class="input" type="number" name="warn" min="1" value="' + st.warn + '">') +
+      fld('Kritis (hari)', '<input class="input" type="number" name="crit" min="1" value="' + st.crit + '">') +
+      fld('Peringatan serapan nilai (%)', '<input class="input" type="number" name="absorb" min="1" max="200" value="' + st.absorbWarn + '">') + '</div>' +
+      '<div class="set-grid" style="margin-top:12px">' +
+      fld('Jenis kontrak (satu per baris)', '<textarea class="input" name="jenis" rows="6">' + esc(st.jenis.join('\n')) + '</textarea>') +
+      fld('Fungsi pengguna (satu per baris)', '<textarea class="input" name="fungsi" rows="6">' + esc(st.fungsi.join('\n')) + '</textarea>') + '</div>' +
+      '<div class="toolbar" style="margin-top:12px"><button class="btn sm primary" type="submit">Simpan pengaturan</button></div></form>'
+      : '<div class="small" style="line-height:1.8">Segera berakhir ≤ <b>' + st.warn + '</b> hari · Kritis ≤ <b>' + st.crit + '</b> hari · Peringatan serapan ≥ <b>' + st.absorbWarn + '%</b></div>');
+
+    var wh = warehouseUrl();
+    var whCard = sec('Integrasi Material Warehouse',
+      '<p class="muted small" style="margin-top:0;line-height:1.6">Tombol <b>Material di Warehouse</b> di detail OA membuka daftar material OA tersebut di website Warehouse, dan <b>Upload Data → Ambil data ME3N Warehouse</b> menarik daftar OA ke Daftar Kontrak tanpa upload ulang.</p>' +
+      (owner ? '<form id="whForm" class="toolbar" autocomplete="off"><input class="input sm" name="url" value="' + esc(st.warehouseUrl || '') + '" placeholder="' + esc(defaultWarehouseUrl()) + '" style="flex:1;min-width:260px"><button class="btn sm primary" type="submit">Simpan URL</button></form>' : '') +
+      '<div class="toolbar" style="margin-top:10px"><a class="btn sm" href="' + esc(wh) + '" target="_blank" rel="noopener">' + ICON.ext + ' Buka website Warehouse</a></div>');
+
+    var audit = (S.D.audit || []);
+    var auditCard = w ? sec('History hapus data',
+      '<p class="muted small" style="margin-top:0">Catatan siapa yang menghapus data apa &amp; kapan — kontrak, realisasi, amandemen, dokumen, pengguna.</p>' +
+      (audit.length ? '<div class="table-wrap" style="max-height:340px"><table class="grid"><thead><tr><th>Waktu</th><th>Oleh</th><th>Data</th><th>Keterangan</th></tr></thead><tbody>' +
+        audit.slice(0, 200).map(function (a) { return '<tr><td class="nowrap small">' + fmtDateTime(a.at) + '</td><td>' + esc(a.by) + '</td><td><span class="badge">' + esc(a.what) + '</span></td><td class="small">' + esc(a.label) + '</td></tr>'; }).join('') + '</tbody></table></div>'
+        : '<p class="small muted" style="margin:0">Belum ada data yang dihapus.</p>')) : '';
+
+    view.innerHTML = '<div class="mk-settings">' + top + users + ghCard + sapCard + remind + whCard + auditCard + '</div>' +
       '<div class="small muted" style="margin-top:16px">Monitoring Kontrak · versi ' + APP_VERSION + ' · data terakhir disimpan ' + esc(S.D.updatedBy || '—') + ' · ' + fmtDateTime(S.D.updatedAt) + '</div>';
+    collapseSettings(view.querySelector('.mk-settings'));
+  }
+  // Setiap kartu (kecuali akun) jadi bagian buka-tutup; status buka diingat di browser (sama seperti Material Warehouse)
+  function collapseSettings(root) {
+    var open = Store.load('setOpen', null) || { 'Pengguna & Login': true, 'Akun saya': true };
+    Array.prototype.slice.call(root.children).forEach(function (card, i) {
+      if (i === 0 || !card.classList.contains('card')) return;
+      var h = card.querySelector('h4.section-title');
+      if (!h || h.parentNode !== card) return;
+      var key = h.textContent.trim(), d = document.createElement('details'), sm = document.createElement('summary'), body = document.createElement('div');
+      d.className = 'card set-sec';
+      if (open[key]) d.open = true;
+      sm.innerHTML = '<span class="set-t">' + h.innerHTML + '</span><span class="set-chev" aria-hidden="true"></span>';
+      h.remove();
+      body.className = 'set-body';
+      while (card.firstChild) body.appendChild(card.firstChild);
+      d.appendChild(sm); d.appendChild(body);
+      d.addEventListener('toggle', function () { var o = Store.load('setOpen', null) || { 'Pengguna & Login': true, 'Akun saya': true }; o[key] = d.open; Store.save('setOpen', o); });
+      card.replaceWith(d);
+    });
   }
 
   // ---------- Pengguna (users.js) ----------
@@ -1376,13 +1420,12 @@
     }
   }
   async function changePw(f) {
-    var old = f.old.value, pw = f.pw.value, pw2 = f.pw2.value;
+    var pw = f.pw.value, pw2 = f.pw2.value;
     if (pw.length < 6) { toast('Password baru minimal 6 karakter', true); return; }
     if (pw !== pw2) { toast('Ulangi password tidak sama', true); return; }
-    loading('Memeriksa password lama…');
-    var r;
-    try { r = await Vault.login(S.users, me(), old); } catch (e) { loading(false); toast('Password lama salah', true); return; }
-    var entry = await Vault.makeUser(me(), pw, role(), S.key, me(), r.adminKey || S.adminKey);
+    if (canWrite() && !S.adminKey) { toast('Kunci akses belum ada di sesi ini — logout, login ulang, lalu ganti password', true); return; }
+    loading('Menyimpan password baru…');
+    var entry = await Vault.makeUser(me(), pw, role(), S.key, me(), S.adminKey);
     entry.id = S.user.id;
     if (await saveUsers(function (list) { return list.map(function (x) { return x.id === entry.id ? entry : x; }); }, 'Ganti password ' + me())) {
       toast('Password diganti. Gunakan password baru saat login berikutnya.'); f.reset();

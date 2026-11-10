@@ -55,7 +55,13 @@ a.mk-log-row:hover { background: var(--surface-2); text-decoration: none; }
 .pw-modal .fleet-form .input, .pw-modal .fleet-form .select { width: 100%; }
 .pw-modal .card:has(.fleet-form) { max-width: 560px; }
 
-.mk-settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(520px, 100%), 1fr)); gap: 16px; align-items: start; }
+.mk-settings { display: block; }
+.mk-settings > .card:first-child { margin-bottom: 4px; }
+.set-2col { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); gap: 18px; margin-top: 14px; }
+.set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 12px 16px; }
+.set-grid .input, .set-grid .select { width: 100%; }
+.set-body .table-wrap { box-shadow: none; }
+.mk-settings .set-body form.toolbar .select { max-width: 100%; }
 .mk-settings .card .toolbar .input { min-width: 0; }
 
 .setup-card p { line-height: 1.55; }
