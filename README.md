@@ -48,7 +48,6 @@ Token yang kedaluwarsa cukup diganti di tempat yang sama; Writer otomatis ikut m
 
 | Dari Monitoring Kontrak | Ke Material Warehouse |
 |---|---|
-| Menu sidebar **Material Warehouse ↗** | Membuka website Warehouse |
 | Tombol **Material di Warehouse ↗** di detail OA | Halaman *Kontrak (OA/RO)* nomor OA tersebut (daftar material yang bisa ditarik) |
 | **Import → Ambil data ME3N Warehouse** | Membaca data ME3N terenkripsi yang sudah di-upload di Warehouse — tanpa upload ulang. Otomatis bila sedang login Warehouse di browser yang sama; bila tidak, diminta login akun Warehouse sekali. |
 

@@ -68,7 +68,7 @@
     arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
   };
 
-  var APP_VERSION = '20261110b'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261110c'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Monitoring-Kontrak';
   var HERO = [{ path: 'assets/hero/pertamina-1-kilang.jpg', pos: '74% 40%' }, { path: 'assets/hero/pertamina-2-gudang.jpg', pos: '30% 60%' }];
   var ROLE_LABEL = { owner: 'Owner Utama', writer: 'Writer', viewer: 'Viewer' };
@@ -425,7 +425,6 @@
       a.classList.toggle('active', rn === r.name || (r.name === 'edit' && rn === 'kontrak'));
       a.classList.toggle('hidden', a.hasAttribute('data-write') && !canWrite());
     });
-    $('#navWarehouse').href = warehouseUrl();
     var t = TITLES[r.name];
     $('#pageTitle').textContent = t[0];
     $('#pageSub').textContent = t[1];
@@ -1257,7 +1256,7 @@
 
     var wh = warehouseUrl();
     var whCard = '<div class="card card-pad"><h3 class="section-title">Integrasi Material Warehouse</h3>' +
-      '<p class="small muted" style="margin:0 0 12px;line-height:1.6">Kedua website terhubung: menu <b>Material Warehouse ↗</b> di sidebar, tombol <b>Material di Warehouse</b> di detail OA (membuka daftar material OA tersebut), dan <b>Import → Ambil data ME3N Warehouse</b> untuk menarik daftar OA tanpa upload ulang.</p>' +
+      '<p class="small muted" style="margin:0 0 12px;line-height:1.6">Kedua website terhubung lewat tombol <b>Material di Warehouse</b> di detail OA (membuka daftar material OA tersebut), dan <b>Import → Ambil data ME3N Warehouse</b> untuk menarik daftar OA tanpa upload ulang.</p>' +
       (owner ? '<form id="whForm" class="toolbar" autocomplete="off"><input class="input" name="url" value="' + esc(st.warehouseUrl || '') + '" placeholder="' + esc(defaultWarehouseUrl()) + '" style="min-width:320px"><button class="btn primary" type="submit">Simpan URL</button></form>' : '') +
       '<div class="toolbar" style="margin-top:10px"><a class="btn" href="' + esc(wh) + '" target="_blank" rel="noopener">' + ICON.ext + ' Buka ' + esc(wh.replace(/^https?:\/\//, '')) + '</a>' + (w ? '<a class="btn" href="#/import">' + ICON.link + ' Ambil data ME3N</a>' : '') + '</div></div>';
 
