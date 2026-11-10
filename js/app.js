@@ -69,7 +69,7 @@
     arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
   };
 
-  var APP_VERSION = '20261110e'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261110f'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Monitoring-Kontrak';
   var HERO = [{ path: 'assets/hero/pertamina-1-kilang.jpg', pos: '74% 40%' }, { path: 'assets/hero/pertamina-2-gudang.jpg', pos: '30% 60%' }];
   var ROLE_LABEL = { owner: 'Owner Utama', writer: 'Writer', viewer: 'Viewer' };
@@ -267,8 +267,8 @@
       '<div class="lc-logo">' + Brand.mark() + '</div>' +
       '<h2>Setup awal</h2><p class="muted">Website belum punya pengguna. Buat akun <b>Owner Utama</b> dan hubungkan ke repo GitHub <span class="mono">' + esc(GH.repo()) + '</span>.</p>' +
       '<label class="lbl">Username Owner</label><div class="field">' + IC_USER + '<input class="input" id="suUser" placeholder="mis. Gerald.samosir" required></div>' +
-      '<label class="lbl">Password (min. 8 karakter)</label><div class="field">' + IC_LOCK + '<input class="input" id="suPw" type="password" autocomplete="new-password" required minlength="8"></div>' +
-      '<label class="lbl">Ulangi password</label><div class="field">' + IC_LOCK + '<input class="input" id="suPw2" type="password" autocomplete="new-password" required minlength="8"></div>' +
+      '<label class="lbl">Password (min. 6 karakter)</label><div class="field">' + IC_LOCK + '<input class="input" id="suPw" type="password" autocomplete="new-password" required minlength="6"></div>' +
+      '<label class="lbl">Ulangi password</label><div class="field">' + IC_LOCK + '<input class="input" id="suPw2" type="password" autocomplete="new-password" required minlength="6"></div>' +
       '<label class="lbl">Token GitHub (Contents: Read and write)</label><div class="field">' + IC_KEY + '<input class="input masked" id="suTok" placeholder="github_pat_…" required></div>' +
       '<div class="small muted" style="margin:-8px 0 12px;line-height:1.5">Buat di <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens</a> → <i>Only select repositories</i>: <b>' + esc(GH.repo().split('/')[1]) + '</b> → Permissions <b>Contents: Read and write</b>.</div>' +
       '<div class="lock-err" id="suErr">' + esc(err || '') + '</div>' +
@@ -282,7 +282,7 @@
     var u = $('#suUser').value.trim(), pw = $('#suPw').value, pw2 = $('#suPw2').value, tok = $('#suTok').value.trim();
     var err = $('#suErr');
     if (!u || u.length < 3) { err.textContent = 'Username minimal 3 karakter'; return; }
-    if (pw.length < 8) { err.textContent = 'Password minimal 8 karakter'; return; }
+    if (pw.length < 6) { err.textContent = 'Password minimal 6 karakter'; return; }
     if (pw !== pw2) { err.textContent = 'Ulangi password tidak sama'; return; }
     err.textContent = '';
     loading('Mengecek token GitHub…');
@@ -1258,7 +1258,7 @@
   function renderSettings() {
     var st = settings(), owner = isOwner(), w = canWrite();
     var acc = '<div class="card card-pad"><h3 class="section-title">Akun saya</h3><div class="toolbar"><div class="side-user" style="background:var(--surface-2);color:var(--ink);margin:0"><div class="avatar" style="color:#fff">' + esc(me().charAt(0).toUpperCase()) + '</div><div><b>' + esc(me()) + '</b><div class="small muted">' + roleLabel(role()) + '</div></div></div></div>' +
-      (w ? '<form id="pwForm" class="toolbar" style="margin-top:14px" autocomplete="off"><input class="input" type="password" name="old" placeholder="Password lama" required autocomplete="current-password"><input class="input" type="password" name="pw" placeholder="Password baru (min. 8)" required minlength="8" autocomplete="new-password"><input class="input" type="password" name="pw2" placeholder="Ulangi password baru" required autocomplete="new-password"><button class="btn primary" type="submit">Ganti password</button></form>'
+      (w ? '<form id="pwForm" class="toolbar" style="margin-top:14px" autocomplete="off"><input class="input" type="password" name="old" placeholder="Password lama" required autocomplete="current-password"><input class="input" type="password" name="pw" placeholder="Password baru (min. 6)" required minlength="6" autocomplete="new-password"><input class="input" type="password" name="pw2" placeholder="Ulangi password baru" required autocomplete="new-password"><button class="btn primary" type="submit">Ganti password</button></form>'
         : '<p class="small muted" style="margin:12px 0 0">Untuk ganti password, hubungi Owner Utama.</p>') + '</div>';
 
     var users = '';
@@ -1275,7 +1275,7 @@
         'Writer menyimpan memakai token GitHub Owner yang tersimpan terenkripsi — Writer <b>tidak perlu akun GitHub</b>.</p>' +
         '<div class="table-wrap" style="box-shadow:none"><table class="grid"><thead><tr><th>Pengguna</th><th>Peran</th><th>Akses simpan</th><th>Atur password</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
         '<form id="addUser" class="toolbar" style="margin-top:14px" autocomplete="off"><input class="input" name="u" placeholder="Username baru (mis. nama.pengguna)" required><select class="select" name="role"><option value="writer">Writer</option><option value="viewer">Viewer</option></select>' +
-        '<input class="input" type="password" name="pw" placeholder="Password awal (min. 8)" required minlength="8" autocomplete="new-password"><button class="btn primary" type="submit">' + ICON.plus + ' Tambah pengguna</button></form>' +
+        '<input class="input" type="password" name="pw" placeholder="Password awal (min. 6)" required minlength="6" autocomplete="new-password"><button class="btn primary" type="submit">' + ICON.plus + ' Tambah pengguna</button></form>' +
         '<p class="small muted" style="margin:8px 0 0">Berikan username & password awal ke orang tersebut. Writer bisa mengganti password sendiri setelah login.</p></div>';
     }
 
@@ -1337,7 +1337,7 @@
   async function addUser(f) {
     var u = f.u.value.trim(), r = f.role.value, pw = f.pw.value;
     if (u.length < 3) { toast('Username minimal 3 karakter', true); return; }
-    if (pw.length < 8) { toast('Password minimal 8 karakter', true); return; }
+    if (pw.length < 6) { toast('Password minimal 6 karakter', true); return; }
     var h = await Vault.hashUser(u);
     if (S.users.some(function (x) { return x.id === h; })) { toast('Username sudah ada', true); return; }
     if (r === 'writer' && !S.adminKey) { toast('Kunci akses belum tersedia — logout lalu login ulang sebagai Owner', true); return; }
@@ -1353,7 +1353,7 @@
     var r = tr.querySelector('[data-urole]').value, pw = tr.querySelector('[data-upw]').value;
     var entry;
     if (pw) {
-      if (pw.length < 8) { toast('Password minimal 8 karakter', true); return; }
+      if (pw.length < 6) { toast('Password minimal 6 karakter', true); return; }
       loading('Menyimpan…');
       entry = await Vault.makeUser(u.name, pw, r, S.key, u.name, S.adminKey);
       entry.id = u.id;
@@ -1377,7 +1377,7 @@
   }
   async function changePw(f) {
     var old = f.old.value, pw = f.pw.value, pw2 = f.pw2.value;
-    if (pw.length < 8) { toast('Password baru minimal 8 karakter', true); return; }
+    if (pw.length < 6) { toast('Password baru minimal 6 karakter', true); return; }
     if (pw !== pw2) { toast('Ulangi password tidak sama', true); return; }
     loading('Memeriksa password lama…');
     var r;
