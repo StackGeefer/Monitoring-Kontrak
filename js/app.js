@@ -37,6 +37,7 @@
     var d = new Date(iso);
     return d.getDate() + ' ' + BLN[d.getMonth()] + ' ' + d.getFullYear() + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
   }
+  function fmtQ(n) { if (n == null) return '—'; return Math.abs(n % 1) > 0 ? nf2.format(n) : nf0.format(n); }
   function pct(n) { return n == null ? '—' : nf0.format(Math.round(n)) + '%'; }
   // "1.250.000.000" / "1,5" / "1250000" -> angka
   function parseNum(v) {
@@ -68,7 +69,7 @@
     arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
   };
 
-  var APP_VERSION = '20261110c'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261110d'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Monitoring-Kontrak';
   var HERO = [{ path: 'assets/hero/pertamina-1-kilang.jpg', pos: '74% 40%' }, { path: 'assets/hero/pertamina-2-gudang.jpg', pos: '30% 60%' }];
   var ROLE_LABEL = { owner: 'Owner Utama', writer: 'Writer', viewer: 'Viewer' };
@@ -102,6 +103,16 @@
     var u = settings().warehouseUrl || defaultWarehouseUrl();
     return /\/$/.test(u) ? u : u + '/';
   }
+
+  // ================= Modul Monitoring SAP =================
+  var Sap = SapMod({
+    S: S, esc: esc, ICON: ICON, Store: Store, GH: GH, Vault: Vault, Model: Model, APP_VERSION: APP_VERSION,
+    nf0: nf0, fmtMoney: fmtMoney, fmtBig: fmtBig, fmtDate: fmtDate, fmtDateTime: fmtDateTime, fmtQ: fmtQ, pct: pct,
+    bar: function (p, c, t) { return bar(p, c, t); }, toast: toast, loading: loading, loadScript: loadScript, loadXLSX: loadXLSX,
+    settings: function () { return settings(); }, canWrite: function () { return canWrite(); }, me: function () { return me(); },
+    warehouseUrl: function () { return warehouseUrl(); }, render: function () { render(); }, closeDrawer: function () { closeDrawer(); },
+    ensureToken: function () { return ensureToken(); }, save: function (m, msg, x) { return save(m, msg, x); }
+  });
 
   // ================= Peran =================
   function role() { return S.user ? S.user.role : ''; }
@@ -329,7 +340,8 @@
   async function logout() {
     sessionClear();
     await Store.del('data');
-    S.user = null; S.key = null; S.adminKey = null; S.D = null; S.files = {}; S.imp = null; S.whKey = null;
+    await Store.del('sap');
+    S.user = null; S.key = null; S.adminKey = null; S.D = null; S.sap = null; S.sapPending = null; S.files = {}; S.imp = null; S.whKey = null; Sap.reset();
     GH.config({ token: null });
     view.innerHTML = '';
     showLogin();
@@ -355,6 +367,7 @@
     S.D = D || Model.emptyData();
     S.D.list = S.D.list || [];
     S.D.audit = S.D.audit || [];
+    await Sap.load();
   }
   async function ensureToken() {
     if (GH.hasToken()) return true;
@@ -401,12 +414,15 @@
 
   // ================= Routing =================
   var TITLES = {
-    dashboard: ['Dashboard', 'Ringkasan masa berlaku, serapan nilai & kontrak yang perlu ditindaklanjuti'],
-    kontrak: ['Daftar Kontrak', 'Semua kontrak / OA — cari, filter status, export Excel'],
-    'jatuh-tempo': ['Jatuh Tempo', 'Kontrak yang berakhir per bulan & rencana tindak lanjutnya'],
+    dashboard: ['Dashboard', 'Ringkasan kontrak OA, PO/RO, progres pengadaan & kontrak yang perlu ditindaklanjuti'],
+    oa: ['Kontrak OA (ME3N)', 'Outline Agreement client 100 & 180 — masa berlaku, serapan nilai & RO yang sudah ditarik'],
+    po: ['PO / RO (ME2N)', 'Purchase Order & Release Order — status pengiriman, keterlambatan & tagihan'],
+    progres: ['Progres PR & PO', 'Status pengadaan (PR) & expediting PO/RO material stock Zona 1'],
+    kontrak: ['Daftar Kontrak (manual)', 'Kontrak jasa / SPK / kontrak di luar ME3N — realisasi, amandemen, jaminan & dokumen'],
+    'jatuh-tempo': ['Jatuh Tempo', 'OA (ME3N) & kontrak manual yang berakhir per bulan, beserta rencana tindak lanjutnya'],
     baru: ['Tambah Kontrak', 'Input kontrak baru secara manual'],
     edit: ['Edit Kontrak', ''],
-    import: ['Import ME3N / Excel', 'Tarik daftar OA dari data Material Warehouse, file ME3N SAP, atau template Excel'],
+    import: ['Upload Data', 'Upload data SAP (ME3N, ME2N) & progres PR/PO, atau tambah kontrak manual dari Excel'],
     pengaturan: ['Pengaturan', 'Akun, pengguna (Writer/Viewer), koneksi GitHub, pengingat & integrasi Warehouse']
   };
   var WRITE_ROUTES = { baru: 1, edit: 1, import: 1 };
@@ -433,6 +449,9 @@
     if (r.name === 'dashboard') renderDashboard();
     else if (r.name === 'kontrak') { if (r.arg) renderDetail(r.arg); else renderList(); }
     else if (r.name === 'jatuh-tempo') renderDue();
+    else if (r.name === 'oa') { if (r.arg) Sap.renderOADetail(r.arg); else Sap.renderOA(); }
+    else if (r.name === 'po') Sap.renderPO();
+    else if (r.name === 'progres') Sap.renderProgres();
     else if (r.name === 'baru') renderForm(null);
     else if (r.name === 'edit') renderForm(r.arg);
     else if (r.name === 'import') renderImport();
@@ -447,8 +466,11 @@
   }
   function renderSide() {
     var n = infos().filter(function (i) { return !i.closed && (i.st === 'crit' || i.st === 'expired'); }).length;
+    n += Sap.has() ? Sap.idx().oas.filter(function (x) { var t = ((S.D.oaNotes || {})[x.c + ':' + x.no] || {}).tindak; return x.st === 'crit' && !t; }).length : 0;
     var b = $('#navDue');
     b.textContent = n; b.classList.toggle('hidden', !n);
+    var nl = Sap.lateCount(), b2 = $('#navLate');
+    b2.textContent = nl; b2.classList.toggle('hidden', !nl);
     $('#sideData').innerHTML = S.user ? '<div class="side-user"><div class="avatar">' + esc(S.user.name.charAt(0).toUpperCase()) + '</div><div style="min-width:0"><b>' + esc(S.user.name) + '</b><div class="small">' + roleLabel(S.user.role) + '</div></div>' +
       '<button class="icon-btn" data-act="logout" title="Keluar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></svg></button></div>' : '';
   }
@@ -485,7 +507,12 @@
 
   // ================= Dashboard =================
   function renderDashboard() {
-    if (!S.D.list.length) { view.innerHTML = emptyState(); return; }
+    var sapHtml = Sap.dashboard();
+    if (!S.D.list.length) {
+      view.innerHTML = sapHtml ? sapHtml + '<div class="card card-pad small muted" style="line-height:1.6"><b>Kontrak manual</b> — kontrak jasa / SPK / sewa di luar ME3N bisa dicatat di <a href="#/kontrak">Daftar Kontrak</a> lengkap dengan realisasi, amandemen, jaminan & dokumen.</div>'
+        : (Sap.has() ? '' : '<div class="card card-pad" style="margin-bottom:14px"><b>Mulai monitoring:</b> upload export SAP <b>ME3N</b> & <b>ME2N</b> (client 100 / 180) dan file <b>Progres PR/RO</b> di <a href="#/import">Upload Data</a>.</div>') + (sapHtml || emptyState());
+      return;
+    }
     var all = infos(), st = settings();
     var open = all.filter(function (i) { return !i.closed; });
     var running = open.filter(function (i) { return i.st !== 'expired'; });
@@ -553,7 +580,7 @@
       return '<a href="#/kontrak/' + esc(x.k.id) + '" class="mk-log-row"><span class="mono small">' + esc(x.k.no) + '</span><span>' + esc(x.l.msg) + '</span><span class="small muted nowrap">' + esc(x.l.by) + ' · ' + fmtDateTime(x.l.at) + '</span></a>';
     }).join('') + '</div>' : '<p class="muted" style="margin:0">Belum ada aktivitas.</p>') + '</div>';
 
-    view.innerHTML = kpis + '<div class="mk-dash">' + actCard + '<div class="mk-dash-side">' + dueCard + jCard + '</div></div>' + '<div style="margin-top:16px">' + logCard + '</div>';
+    view.innerHTML = sapHtml + (sapHtml ? '<div class="sec-h"><h3>Kontrak manual</h3><a href="#/kontrak" class="small">Lihat semua →</a></div>' : '') + kpis + '<div class="mk-dash">' + actCard + '<div class="mk-dash-side">' + dueCard + jCard + '</div></div>' + '<div style="margin-top:16px">' + logCard + '</div>';
   }
 
   // ================= Daftar kontrak =================
@@ -931,35 +958,47 @@
 
   // ================= Jatuh tempo =================
   function renderDue() {
-    $('#pageActions').innerHTML = '<select class="select" id="dueH">' + [3, 6, 12, 24].map(function (n) { return '<option value="' + n + '"' + (S.dueH === n ? ' selected' : '') + '>' + n + ' bulan ke depan</option>'; }).join('') + '</select>';
-    if (!S.D.list.length) { view.innerHTML = emptyState(); return; }
-    var all = infos().filter(function (i) { return !i.closed && i.end; }), w = canWrite();
-    var now = new Date(), lim = new Date(now.getFullYear(), now.getMonth() + S.dueH, 1), limS = lim.toISOString().slice(0, 7);
-    var exp = all.filter(function (i) { return i.days < 0; }).sort(function (a, b) { return a.end < b.end ? -1 : 1; });
+    $('#pageActions').innerHTML = '<select class="select" id="dueSrc">' + [['', 'OA SAP & kontrak manual'], ['sap', 'OA SAP (ME3N) saja'], ['manual', 'Kontrak manual saja']].map(function (o) { return '<option value="' + o[0] + '"' + ((S.dueSrc || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+      '<select class="select" id="dueH">' + [3, 6, 12, 24].map(function (n) { return '<option value="' + n + '"' + (S.dueH === n ? ' selected' : '') + '>' + n + ' bulan ke depan</option>'; }).join('') + '</select>';
+    var w = canWrite(), st = settings(), notes = S.D.oaNotes || {};
+    var items = [];
+    if (S.dueSrc !== 'sap') infos().filter(function (i) { return !i.closed && i.end; }).forEach(function (i) { items.push({ m: i, end: i.end, days: i.days, crit: i.st === 'crit' }); });
+    if (S.dueSrc !== 'manual' && Sap.has()) Sap.dueList().filter(function (x) { return !x.closed && x.end; }).forEach(function (x) { items.push({ s: x, end: x.end, days: x.days, crit: x.days != null && x.days <= st.crit }); });
+    if (!items.length && !S.D.list.length && !Sap.has()) { view.innerHTML = emptyState(); return; }
+    var now = new Date(), lim = new Date(now.getFullYear(), now.getMonth() + S.dueH, 1), limS = lim.getFullYear() + '-' + ('0' + (lim.getMonth() + 1)).slice(-2);
+    var exp = items.filter(function (i) { return i.days < 0; });
     var groups = {};
-    all.filter(function (i) { return i.days >= 0 && i.end.slice(0, 7) < limS; }).forEach(function (i) { (groups[i.end.slice(0, 7)] = groups[i.end.slice(0, 7)] || []).push(i); });
+    items.filter(function (i) { return i.days >= 0 && i.end.slice(0, 7) < limS; }).forEach(function (i) { (groups[i.end.slice(0, 7)] = groups[i.end.slice(0, 7)] || []).push(i); });
+    function dB(days) { return days < 0 ? '<span class="badge bad">Lewat ' + nf0.format(-days) + ' hari</span>' : '<span class="badge ' + (days <= st.crit ? 'bad' : days <= st.warn ? 'warn' : 'ok') + '">' + nf0.format(days) + ' hari lagi</span>'; }
+    function tSel(attr, val) { return '<select class="select sm" ' + attr + '>' + Object.keys(Model.TINDAK).map(function (t) { return '<option value="' + t + '"' + ((val || '') === t ? ' selected' : '') + '>' + Model.TINDAK[t] + '</option>'; }).join('') + '</select>'; }
     function rows(list) {
-      return list.sort(function (a, b) { return a.end < b.end ? -1 : 1; }).map(function (i) {
-        var k = i.k;
-        return '<tr><td class="nowrap"><b>' + fmtDate(i.end) + '</b><div>' + daysBadge(i) + '</div></td>' +
-          '<td><a class="mono" href="#/kontrak/' + esc(k.id) + '" style="font-weight:700">' + esc(k.no) + '</a><div class="small muted">' + esc(k.jenis || '') + '</div></td>' +
-          '<td class="mat-cell"><div class="mat-desc">' + esc(k.judul || '—') + '</div><div class="small muted">' + esc(k.vendor || '') + '</div></td>' +
-          '<td style="min-width:120px">' + bar(i.realPct, absorbCls(i.realPct)) + '<div class="small muted">' + pct(i.realPct) + ' · sisa ' + esc(fmtBig(i.sisa, k.cur)) + '</div></td>' +
-          '<td class="small">' + esc(k.pic || '—') + '</td>' +
-          '<td>' + (w ? '<select class="select sm" data-tindak="' + esc(k.id) + '">' + Object.keys(Model.TINDAK).map(function (t) { return '<option value="' + t + '"' + ((k.tindak || '') === t ? ' selected' : '') + '>' + Model.TINDAK[t] + '</option>'; }).join('') + '</select>'
-            : '<span class="badge ' + (k.tindak ? 'ro' : 'warn') + '">' + esc(Model.TINDAK[k.tindak || '']) + '</span>') + '</td></tr>';
+      return list.sort(function (a, b) { return a.end < b.end ? -1 : a.end > b.end ? 1 : 0; }).map(function (it) {
+        if (it.m) {
+          var i = it.m, k = i.k;
+          return '<tr><td class="nowrap"><b>' + fmtDate(i.end) + '</b><div>' + dB(i.days) + '</div></td>' +
+            '<td><span class="badge">Manual</span> <a class="mono" href="#/kontrak/' + esc(k.id) + '" style="font-weight:700">' + esc(k.no) + '</a><div class="small muted">' + esc(k.jenis || '') + '</div></td>' +
+            '<td class="mat-cell"><div class="mat-desc">' + esc(k.judul || '—') + '</div><div class="small muted">' + esc(k.vendor || '') + (k.pic ? ' · PIC ' + esc(k.pic) : '') + '</div></td>' +
+            '<td style="min-width:120px">' + bar(i.realPct, absorbCls(i.realPct)) + '<div class="small muted">' + pct(i.realPct) + ' · sisa ' + esc(fmtBig(i.sisa, k.cur)) + '</div></td>' +
+            '<td>' + (w ? tSel('data-tindak="' + esc(k.id) + '"', k.tindak) : '<span class="badge ' + (k.tindak ? 'ro' : 'warn') + '">' + esc(Model.TINDAK[k.tindak || '']) + '</span>') + '</td></tr>';
+        }
+        var x = it.s, o = x.x.o, key = x.c + ':' + x.no, n = notes[key] || {};
+        return '<tr><td class="nowrap"><b>' + fmtDate(x.end) + '</b><div>' + dB(x.days) + '</div></td>' +
+          '<td>' + Sap.clientBadge(x.c) + ' <a class="mono" href="#/oa/' + esc(x.c + '/' + x.no) + '" style="font-weight:700">' + esc(x.no) + '</a><div class="small muted">OA ME3N' + (o.pg ? ' · ' + esc(o.pg) : '') + '</div></td>' +
+          '<td class="mat-cell"><div class="mat-desc">' + esc(o.vendor || '—') + '</div><div class="small muted">' + esc(x.x.cat || '') + (n.catatan ? ' · <i>' + esc(n.catatan) + '</i>' : '') + '</div></td>' +
+          '<td style="min-width:120px">' + bar(x.x.pct, absorbCls(x.x.pct)) + '<div class="small muted">' + pct(x.x.pct) + ' · sisa ' + esc(fmtBig(x.x.sisa, o.cur)) + '</div></td>' +
+          '<td>' + (w ? Sap.oaTindakSelect(x.c, x.no, n.tindak) : '<span class="badge ' + (n.tindak ? 'ro' : 'warn') + '">' + esc(Model.TINDAK[n.tindak || '']) + '</span>') + '</td></tr>';
       }).join('');
     }
-    var head = '<thead><tr><th>Berakhir</th><th>No. Kontrak</th><th>Pekerjaan / Vendor</th><th>Serapan</th><th>PIC</th><th>Tindak lanjut</th></tr></thead>';
+    var head = '<thead><tr><th>Berakhir</th><th>No. kontrak / OA</th><th>Pekerjaan / vendor</th><th>Serapan</th><th>Tindak lanjut</th></tr></thead>';
     var html = '';
     if (exp.length) html += '<div class="mk-due-group bad"><h3>Lewat masa berlaku — belum ditutup <span class="badge bad">' + exp.length + '</span></h3><div class="table-wrap"><table class="grid">' + head + '<tbody>' + rows(exp) + '</tbody></table></div></div>';
     Object.keys(groups).sort().forEach(function (ym) {
-      var g = groups[ym], soon = g.some(function (i) { return i.st === 'crit'; });
+      var g = groups[ym], soon = g.some(function (i) { return i.crit; });
       html += '<div class="mk-due-group' + (soon ? ' bad' : '') + '"><h3>' + BULAN[+ym.slice(5) - 1] + ' ' + ym.slice(0, 4) + ' <span class="badge ' + (soon ? 'bad' : 'warn') + '">' + g.length + ' kontrak</span></h3><div class="table-wrap"><table class="grid">' + head + '<tbody>' + rows(g) + '</tbody></table></div></div>';
     });
-    var st = settings();
-    view.innerHTML = '<div class="card card-pad small muted" style="margin-bottom:14px;line-height:1.6">Status: <span class="badge warn">Segera berakhir</span> ≤ ' + st.warn + ' hari · <span class="badge bad">Kritis</span> ≤ ' + st.crit + ' hari. ' +
-      'Kontrak yang sudah <b>Selesai / Terminasi</b> tidak ditampilkan. Pilih rencana tindak lanjut agar tim tahu kontrak mana yang sedang diproses amandemen atau pengadaan ulang.</div>' +
+    view.innerHTML = (Sap.has() ? '<div class="toolbar" style="margin-bottom:12px">' + Sap.clientChips() + '</div>' : '') +
+      '<div class="card card-pad small muted" style="margin-bottom:14px;line-height:1.6">Status: <span class="badge warn">Segera berakhir</span> ≤ ' + st.warn + ' hari · <span class="badge bad">Kritis</span> ≤ ' + st.crit + ' hari. ' +
+      'Kontrak yang sudah <b>Selesai / ditutup</b> tidak ditampilkan. Pilih rencana tindak lanjut (amandemen / pengadaan ulang) agar tim tahu kontrak mana yang sedang diproses.' + (Sap.has() && Sap.V.client ? ' Filter client: <b>' + esc(Sap.V.client + ' · ' + Sap.clientName(Sap.V.client)) + '</b>.' : '') + '</div>' +
       (html || '<div class="card empty"><h3>Tidak ada kontrak yang berakhir dalam ' + S.dueH + ' bulan ke depan</h3></div>');
   }
 
@@ -1014,7 +1053,7 @@
   // ================= Import =================
   function renderImport() {
     var wh = warehouseUrl(), I = S.imp;
-    view.innerHTML = '<div class="ds-grid" style="margin-bottom:16px">' +
+    view.innerHTML = Sap.uploadCard() + '<div class="sec-h"><h3>Tambah ke Daftar Kontrak (manual)</h3></div><div class="ds-grid" style="margin-bottom:16px">' +
       '<div class="card ds-card"><h4>' + ICON.link + ' Ambil dari Material Warehouse</h4><p class="small muted" style="margin:0;line-height:1.6">Tarik daftar OA dari data <b>ME3N</b> yang sudah di-upload di website <a href="' + esc(wh) + '" target="_blank" rel="noopener">Material Warehouse</a> — tanpa upload ulang. ' +
       'Perlu akun Warehouse (otomatis bila Anda sedang login Warehouse di browser ini).</p><div class="toolbar" style="margin-top:auto"><button class="btn primary" data-act="imp-wh">' + ICON.link + ' Ambil data ME3N Warehouse</button></div></div>' +
       '<div class="card ds-card"><h4>' + ICON.upload + ' Upload file Excel</h4><p class="small muted" style="margin:0;line-height:1.6">File export <b>ME3N</b> SAP (dideteksi otomatis dari judul kolom), atau <b>template Excel</b> daftar kontrak (kontrak jasa, SPK, dll. yang tidak ada di ME3N).</p>' +
@@ -1265,7 +1304,14 @@
       audit.slice(0, 200).map(function (a) { return '<tr><td class="nowrap small">' + fmtDateTime(a.at) + '</td><td>' + esc(a.by) + '</td><td><span class="badge">' + esc(a.what) + '</span></td><td class="small">' + esc(a.label) + '</td></tr>'; }).join('') + '</tbody></table></div>'
       : '<p class="small muted" style="margin:0">Belum ada data yang dihapus.</p>') + '</div>' : '';
 
-    view.innerHTML = '<div class="mk-settings">' + acc + users + ghCard + whCard + remind + auditCard + '</div>' +
+    var cl = st.clients || {};
+    var sapCard = '<div class="card card-pad"><h3 class="section-title">Monitoring SAP</h3>' +
+      (owner ? '<form id="sapSetForm" autocomplete="off"><div class="fleet-form">' +
+        fld('Kurs USD → IDR (untuk total ekuivalen)', '<input class="input" name="kurs" inputmode="decimal" value="' + esc(nf0.format(+st.kurs || 16000)) + '">') + '<div></div>' +
+        fld('Nama Client 100', '<input class="input" name="c100" value="' + esc(cl['100'] || 'Pertamina EP') + '">') + fld('Nama Client 180', '<input class="input" name="c180" value="' + esc(cl['180'] || 'PHE') + '">') +
+        '</div><div class="fleet-actions" style="margin-top:12px"><button class="btn primary" type="submit">Simpan</button></div></form>'
+        : '<div class="small" style="line-height:1.8">Kurs USD: <b>' + nf0.format(+st.kurs || 16000) + '</b> · Client 100: <b>' + esc(cl['100'] || 'Pertamina EP') + '</b> · Client 180: <b>' + esc(cl['180'] || 'PHE') + '</b></div>') + '</div>';
+    view.innerHTML = '<div class="mk-settings">' + acc + users + ghCard + sapCard + whCard + remind + auditCard + '</div>' +
       '<div class="small muted" style="margin-top:16px">Monitoring Kontrak · versi ' + APP_VERSION + ' · data terakhir disimpan ' + esc(S.D.updatedBy || '—') + ' · ' + fmtDateTime(S.D.updatedAt) + '</div>';
   }
 
@@ -1361,6 +1407,7 @@
   // ================= Event =================
   document.addEventListener('click', function (e) {
     var t = e.target;
+    if (t.id === 'scrim') { closeDrawer(); return; }
     var go = t.closest('[data-goto]');
     if (go) { S.f.st = go.getAttribute('data-goto'); S.f.q = ''; Store.save('filters', S.f); }
     var tr = t.closest('tr[data-open]');
@@ -1405,6 +1452,7 @@
     else if (t.id === 'kfungsi') { S.f.fungsi = t.value; Store.save('filters', S.f); renderRows(); }
     else if (t.id === 'ksort') { S.f.sort = t.value; Store.save('filters', S.f); renderRows(); }
     else if (t.id === 'dueH') { S.dueH = +t.value; renderDue(); }
+    else if (t.id === 'dueSrc') { S.dueSrc = t.value; renderDue(); }
     else if (t.id === 'impPg') { S.imp.pg = t.value; renderImpTable(); }
     else if (t.id === 'impFile') { importFile(t.files[0]); t.value = ''; }
     else if (t.hasAttribute('data-isel')) { S.imp.sel[t.getAttribute('data-isel')] = t.checked; renderImpTable(); }
@@ -1423,6 +1471,11 @@
       var url = f.url.value.trim();
       if (url && !/^https?:\/\//.test(url)) { toast('URL harus diawali https://', true); return; }
       save(function (D) { D.settings = Object.assign({}, Model.settingsOf(D), { warehouseUrl: url }); }, 'URL Material Warehouse').then(function (ok) { if (ok) { toast('URL Warehouse disimpan'); render(); } });
+    } else if (f.id === 'sapSetForm') {
+      e.preventDefault();
+      var k = parseNum(f.kurs.value);
+      if (!(k > 1000)) { toast('Isi kurs USD yang benar, mis. 16.000', true); return; }
+      save(function (D) { D.settings = Object.assign({}, Model.settingsOf(D), { kurs: k, clients: { '100': f.c100.value.trim() || 'Pertamina EP', '180': f.c180.value.trim() || 'PHE' } }); }, 'Pengaturan Monitoring SAP').then(function (ok) { if (ok) { toast('Pengaturan disimpan'); Sap.reset(); render(); } });
     } else if (f.id === 'setForm') {
       e.preventDefault();
       var lines = function (s) { return s.split('\n').map(function (x) { return x.trim(); }).filter(Boolean); };
@@ -1448,14 +1501,14 @@
     if (document.visibilityState !== 'visible') return;
     checkUpdate();
     // data terbaru dari pengguna lain
-    if (S.user && S.D && !$('.pw-modal') && !$('#kForm')) loadData().then(render).catch(function () {});
+    if (S.user && S.D && !$('.pw-modal') && !$('#kForm') && !S.sapPending && !$('#drawer.open')) loadData().then(render).catch(function () {});
   });
 
   async function startApp(fresh) {
     loading('Memuat data kontrak…');
     try {
       await unlockToken();
-      if (!fresh) await loadData();
+      if (!fresh) await loadData(); else await Sap.load();
       loading(false);
       render();
     } catch (e) { loading(false); toast('Gagal memuat data: ' + e.message, true); }

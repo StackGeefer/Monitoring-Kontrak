@@ -22,6 +22,20 @@ Akun Owner Utama **Gerald.samosir** sudah dibuat (password sama dengan website M
 
 Token yang kedaluwarsa cukup diganti di tempat yang sama; Writer otomatis ikut memakai token baru.
 
+## Monitoring SAP (Client 100 Pertamina EP & Client 180 PHE)
+
+Menu **Upload Data** → pilih beberapa file sekaligus. Jenis file & client dideteksi otomatis (nama file berisi `_100_` / `_180_`, tanggal data dari nama file, mis. `110826` = 8 Nov 2026):
+
+| File | Dipakai untuk |
+|---|---|
+| **ME3N** client 100 / 180 | Menu **Kontrak OA (ME3N)**: masa berlaku, nilai target vs released (serapan), item kontrak, RO yang sudah ditarik, tindak lanjut OA |
+| **ME2N** client 100 / 180 | Menu **PO / RO (ME2N)**: outstanding (sisa kirim), terlambat (lewat delivery date), belum ditagih, outstanding per plant, item per PO/RO. Item dengan Deletion Indicator `L` diabaikan |
+| **Progres PR/RO** (sheet *Pengadaan* & *Expediting*) | Menu **Progres PR & PO**: status PR (On Progress / On Planning / pipeline), tahapan, lead time hari kerja (dihitung otomatis s/d hari ini, tanpa Sabtu-Minggu & libur nasional), expediting PO/RO dicocokkan otomatis dengan ME2N (status penerimaan SAP) |
+
+- **Dashboard** menampilkan ringkasan ketiganya + OA segera berakhir & PO/RO terlambat; **Jatuh Tempo** menggabungkan OA (ME3N) dan kontrak manual.
+- Filter **Semua client / 100 / 180** di setiap halaman. Total campuran IDR + USD memakai kurs di **Pengaturan → Monitoring SAP** (default 16.000).
+- Upload ulang file sejenis = data jenis itu diganti yang terbaru. Data tersimpan terenkripsi di `data/sap.js`.
+
 ## Peran pengguna
 
 | Peran | Bisa apa |
