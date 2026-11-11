@@ -41,6 +41,15 @@
     function clientOk(c) { return !V.client || V.client === c; }
     function wkClients(wk) { var w = String(wk || '').toUpperCase(), r = []; if (/PEP/.test(w)) r.push('100'); if (/PHE/.test(w)) r.push('180'); return r; }
     function wkOk(wk) { if (!V.client) return true; var c = wkClients(wk); return !c.length || c.indexOf(V.client) >= 0; }
+    // Update status PO/RO oleh tim MIM (disimpan di data kontrak, bukan di data SAP → tidak hilang saat upload ME2N baru)
+    var MIM_ST = ['Proses di vendor (pengadaan / fabrikasi)', 'Siap kirim', 'Dalam pengiriman', 'Tiba di gudang — proses inspeksi / GR', 'Ditunda / reschedule', 'Kendala — perlu eskalasi'];
+    function poNote(c, no) { return ((S.D && S.D.poNotes) || {})[c + ':' + no] || null; }
+    function mimCls(st) { return /Kendala/.test(st) ? 'bad' : /Ditunda/.test(st) ? 'warn' : /Tiba/.test(st) ? 'ok' : 'ro'; }
+    function mimLine(n) {
+      if (!n) return '';
+      return '<div class="mim-line"><span class="badge ' + mimCls(n.st) + '">MIM: ' + esc(n.st || 'catatan') + '</span>' + (n.eta ? ' <span class="small">ETA <b>' + ctx.fmtDate(n.eta) + '</b></span>' : '') +
+        (n.note ? '<div class="small">' + esc(n.note) + '</div>' : '') + '<div class="small muted">' + esc(n.by || '') + ' · ' + ctx.fmtDate((n.at || '').slice(0, 10)) + '</div></div>';
+    }
     function noteOf(c, no) { return ((S.D && S.D.oaNotes) || {})[c + ':' + no] || null; }
 
     // Hari kerja (inklusif) seperti NETWORKDAYS Excel, tanpa Sabtu-Minggu & libur nasional
@@ -213,8 +222,8 @@
 
     // ================= PO / RO (ME2N) =================
     var PO_ST = { open: ['Dalam pengiriman', 'ro'], partial: ['Diterima sebagian', 'bau'], late: ['Terlambat', 'bad'], inv: ['Diterima · belum ditagih', 'warn'], done: ['Selesai', 'ok'] };
-    var PO_F = [['out', 'Outstanding'], ['late', 'Terlambat'], ['inv', 'Belum ditagih'], ['done', 'Selesai'], ['all', 'Semua']];
-    function poPass(x, s) { return s === 'all' ? true : s === 'out' ? x.out > 0.5 : s === 'inv' ? x.inv > 0.5 : x.st === s; }
+    var PO_F = [['out', 'Outstanding'], ['late', 'Terlambat'], ['noupd', 'Terlambat · belum ada update MIM'], ['inv', 'Belum ditagih'], ['done', 'Selesai'], ['all', 'Semua']];
+    function poPass(x, s) { return s === 'noupd' ? (x.late && !poNote(x.c, x.no)) : s === 'all' ? true : s === 'out' ? x.out > 0.5 : s === 'inv' ? x.inv > 0.5 : x.st === s; }
     function poBadge(x) { var b = PO_ST[x.st]; return '<span class="badge ' + b[1] + '">' + b[0] + '</span>'; }
     function poHead() { return '<thead><tr><th>No. PO / RO</th><th>Vendor / material</th><th>Plant</th><th>Tgl dok.</th><th>Delivery</th><th class="num">Nilai</th><th>Penerimaan</th><th>Status</th></tr></thead>'; }
     function poRow(x) {
@@ -227,7 +236,8 @@
         '<td class="nowrap small"><b>' + ctx.fmtDate(x.due) + '</b>' + (x.out > 0.5 && x.days != null ? '<div>' + (x.days < 0 ? '<span class="badge bad">lewat ' + ctx.nf0.format(-x.days) + ' hr</span>' : '<span class="small muted">' + ctx.nf0.format(x.days) + ' hari lagi</span>') + '</div>' : '') + '</td>' +
         '<td class="num nowrap"><b>' + esc(money(x.val, p.cur)) + '</b>' + (x.out > 0.5 ? '<div class="small muted">sisa ' + esc(money(x.out, p.cur)) + '</div>' : '') + '</td>' +
         '<td style="min-width:110px">' + bar(x.recv, x.late ? 'bad' : '') + '<div class="small muted">' + ctx.pct(x.recv) + ' diterima</div></td>' +
-        '<td>' + poBadge(x) + (x.inv > 0.5 && x.st !== 'inv' ? '<div class="small muted" style="margin-top:3px">blm ditagih ' + esc(money(x.inv, p.cur)) + '</div>' : '') + '</td></tr>';
+        '<td>' + poBadge(x) + (x.inv > 0.5 && x.st !== 'inv' ? '<div class="small muted" style="margin-top:3px">blm ditagih ' + esc(money(x.inv, p.cur)) + '</div>' : '') +
+        (x.out > 0.5 ? (mimLine(poNote(x.c, x.no)) || (x.late ? '<div class="small" style="margin-top:4px;color:var(--bad)">belum ada update MIM</div>' : '')) : '') + '</td></tr>';
     }
     function poFiltered() {
       var F = V.po, q = F.q.trim().toLowerCase();
@@ -266,6 +276,7 @@
         kpi('Total PO / RO', ctx.nf0.format(all.length), esc(moneyIdr(sumIdr(all, function (x) { return x.val; }, function (x) { return x.p.cur; }))) + ' · ' + all.filter(function (x) { return x.type === 'RO'; }).length + ' RO, ' + all.filter(function (x) { return x.type === 'PO'; }).length + ' PO', '', ' data-post="all"') +
         kpi('Outstanding', ctx.nf0.format(out.length), 'sisa kirim ' + esc(moneyIdr(sumIdr(out, function (x) { return x.out; }, function (x) { return x.p.cur; }))), out.length ? 'warn' : '', ' data-post="out"') +
         kpi('Terlambat', ctx.nf0.format(late.length), esc(moneyIdr(sumIdr(late, function (x) { return x.out; }, function (x) { return x.p.cur; }))) + ' lewat delivery date', late.length ? 'bad' : '', ' data-post="late"') +
+        kpi('Terlambat · belum di-update', ctx.nf0.format(late.filter(function (x) { return !poNote(x.c, x.no); }).length), 'belum ada update status dari MIM', late.some(function (x) { return !poNote(x.c, x.no); }) ? 'bad' : 'ok', ' data-post="noupd"') +
         kpi('Belum ditagih', ctx.nf0.format(inv.length), esc(moneyIdr(sumIdr(inv, function (x) { return x.inv; }, function (x) { return x.p.cur; }))) + ' still to be invoiced', '', ' data-post="inv"') + '</div>' +
         (plRows ? '<div class="card card-pad" style="margin-bottom:14px"><div class="toolbar" style="margin-bottom:10px"><h3 class="section-title" style="margin:0">Outstanding per plant</h3><span class="small muted">klik untuk filter</span>' + (F.plant ? '<button class="btn sm" data-plant="">Semua plant</button>' : '') + '</div><div class="pl-grid">' + plRows + '</div></div>' : '') +
         '<div class="card card-pad" style="margin-bottom:14px;display:flex;flex-direction:column;gap:12px"><div class="toolbar">' + searchBox('poq', F.q, 'Cari no. PO/RO, vendor, material, OA, PR…') +
@@ -299,8 +310,36 @@
         '<div><span>Belum ditagih (still to be invoiced)</span>' + esc(ctx.fmtMoney(x.inv, q.cur)) + '</div><div><span>Penerimaan</span>' + ctx.pct(x.recv) + '</div>' +
         '<div><span>Outline Agreement</span>' + (x.oa.length ? x.oa.map(function (o) { return '<a class="mono" href="#/oa/' + esc(x.c + '/' + o) + '">' + esc(o) + '</a>'; }).join(', ') : '—') + '</div>' +
         '<div><span>Purchase Requisition</span><span class="mono small">' + esc(x.pr.slice(0, 6).join(', ') || '—') + (x.pr.length > 6 ? ' …' : '') + '</span></div></div>' +
+        mimBox(x) +
         '<div><h3 class="section-title">Item <span class="badge">' + q.items.length + '</span></h3><div class="table-wrap" style="box-shadow:none"><table class="grid"><thead><tr><th>Item</th><th>Material</th><th class="num">Qty</th><th class="num">Nilai</th><th class="num">Sisa kirim</th></tr></thead><tbody>' + items + '</tbody></table></div></div></div>';
       d.classList.add('open'); $('#scrim').classList.add('open'); d.setAttribute('aria-hidden', 'false');
+    }
+
+    function mimBox(x) {
+      var key = x.c + ':' + x.no, n = poNote(x.c, x.no) || {}, w = ctx.canWrite();
+      var hist = (n.hist || []).map(function (h) { return '<div class="mk-log-row"><span><b>' + esc(h.st || 'Catatan') + '</b>' + (h.eta ? ' · ETA ' + ctx.fmtDate(h.eta) : '') + (h.note ? ' — ' + esc(h.note) : '') + '</span><span class="small muted nowrap">' + esc(h.by || '') + ' · ' + ctx.fmtDateTime(h.at) + '</span></div>'; }).join('');
+      return '<div class="mim-box"><h3 class="section-title">Update status dari MIM</h3>' +
+        (w ? '<div class="fleet-form"><label class="fleet-fld"><span>Status terkini</span><select class="select" id="pnSt"><option value="">— pilih —</option>' + MIM_ST.map(function (o) { return '<option' + (n.st === o ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select></label>' +
+          '<label class="fleet-fld"><span>Perkiraan tiba (ETA)</span><input class="input" type="date" id="pnEta" value="' + esc(n.eta || '') + '"></label>' +
+          '<label class="fleet-fld wide"><span>Catatan (hasil follow-up vendor, kendala, no. resi, dll.)</span><textarea class="input" id="pnNote" rows="2">' + esc(n.note || '') + '</textarea></label></div>' +
+          '<div class="toolbar" style="margin-top:10px"><button class="btn sm primary" data-act="po-note" data-key="' + esc(key) + '">Simpan update</button>' + (n.at ? '<span class="small muted">Terakhir: ' + esc(n.by || '') + ' · ' + ctx.fmtDateTime(n.at) + '</span>' : '<span class="small muted">Belum ada update</span>') + '</div>'
+          : (n.at ? mimLine(n) : '<p class="small muted" style="margin:0">Belum ada update dari MIM.</p>')) +
+        (hist ? '<details class="doc-points" style="margin-top:10px"' + (w ? '' : ' open') + '><summary>Riwayat update (' + n.hist.length + ')</summary><div class="mk-log">' + hist + '</div></details>' : '') + '</div>';
+    }
+    function savePoNote(key) {
+      var st = $('#pnSt').value, eta = $('#pnEta').value, note = $('#pnNote').value.trim();
+      if (!st && !note && !eta) { ctx.toast('Isi status, ETA, atau catatan', true); return; }
+      var rec = { st: st, eta: eta, note: note, by: ctx.me(), at: new Date().toISOString() };
+      ctx.save(function (D) {
+        D.poNotes = D.poNotes || {};
+        var hist = ((D.poNotes[key] || {}).hist || []).slice(0, 29);
+        hist.unshift(rec);
+        D.poNotes[key] = Object.assign({}, rec, { hist: hist });
+      }, 'Update MIM PO/RO ' + key.split(':')[1] + (st ? ': ' + st : '')).then(function (ok) {
+        if (!ok) return;
+        ctx.toast('Update status PO/RO disimpan');
+        ctx.render(); openPO(key.replace(':', '/'));
+      });
     }
 
     // ================= Progres PR & PO =================
@@ -397,7 +436,7 @@
           '<td><div class="mat-desc">' + esc(r.desc) + '</div><div class="small muted">' + esc(r.vendor || '') + '</div></td><td class="small">' + esc(r.wk) + ' ' + r.clients.map(clientBadge).join(' ') + '</td>' +
           '<td class="num nowrap"><b>' + (r.nilai != null ? esc(money(r.nilai, r.cur)) : '—') + '</b></td>' +
           '<td class="nowrap small"><b>' + (r.deliv ? ctx.fmtDate(r.deliv) : '—') + '</b>' + (r.days != null && !(s && s.out <= 0.5) ? '<div>' + (r.days < 0 ? '<span class="badge bad">lewat ' + (-r.days) + ' hr</span>' : '<span class="small muted">' + r.days + ' hari lagi</span>') + '</div>' : '') + '</td>' +
-          '<td><span class="badge ' + (r.late ? 'bad' : /Routing/.test(r.stt) ? 'warn' : /SAP/.test(r.stt) ? 'ok' : 'ro') + '">' + esc(r.stt) + '</span>' + (r.note ? '<div class="small" style="margin-top:4px">' + esc(r.note) + '</div>' : '') + sapTxt + '</td></tr>';
+          '<td><span class="badge ' + (r.late ? 'bad' : /Routing/.test(r.stt) ? 'warn' : /SAP/.test(r.stt) ? 'ok' : 'ro') + '">' + esc(r.stt) + '</span>' + (r.note ? '<div class="small" style="margin-top:4px">' + esc(r.note) + '</div>' : '') + sapTxt + (s && s.out > 0.5 ? mimLine(poNote(s.c, s.no)) : '') + '</td></tr>';
       }).join('');
       $('#prBox').innerHTML = '<div class="kpis" style="margin:14px 0">' +
         kpi('Total PO / RO', String(all.length), esc(sumCur(all)), '', ' data-prst=""') +
@@ -595,7 +634,7 @@
       finally { ctx.loading(false); }
     }
     function poRowX(x) {
-      return { Client: x.c, 'No. PO/RO': x.no, Jenis: x.type, 'Doc Type': x.p.dt, PG: x.p.pg, Vendor: x.p.vendor, 'Kode Vendor': x.p.vcode, Plant: x.plants.join(', '), OA: x.oa.join(', '), 'Tgl Dokumen': x.p.dd, 'Delivery Date': x.due, 'Sisa Hari': x.days, Mata: x.p.cur, Nilai: x.val, 'Sisa Kirim': x.out, 'Belum Ditagih': x.inv, 'Diterima %': x.recv == null ? '' : Math.round(x.recv), Status: PO_ST[x.st][0], 'Jumlah Item': x.p.items.length };
+      return { Client: x.c, 'No. PO/RO': x.no, Jenis: x.type, 'Doc Type': x.p.dt, PG: x.p.pg, Vendor: x.p.vendor, 'Kode Vendor': x.p.vcode, Plant: x.plants.join(', '), OA: x.oa.join(', '), 'Tgl Dokumen': x.p.dd, 'Delivery Date': x.due, 'Sisa Hari': x.days, Mata: x.p.cur, Nilai: x.val, 'Sisa Kirim': x.out, 'Belum Ditagih': x.inv, 'Diterima %': x.recv == null ? '' : Math.round(x.recv), Status: PO_ST[x.st][0], 'Jumlah Item': x.p.items.length, 'Status MIM': (poNote(x.c, x.no) || {}).st || '', 'ETA MIM': (poNote(x.c, x.no) || {}).eta || '', 'Catatan MIM': (poNote(x.c, x.no) || {}).note || '', 'Update oleh': (poNote(x.c, x.no) || {}).by || '', 'Tgl update': ((poNote(x.c, x.no) || {}).at || '').slice(0, 10) };
     }
 
     // ================= Event =================
@@ -618,6 +657,7 @@
         else if (a === 'sap-save') savePending();
         else if (a === 'sap-cancel') { S.sapPending = null; ctx.render(); }
         else if (a === 'oa-note') saveNote(b.getAttribute('data-key'));
+        else if (a === 'po-note') savePoNote(b.getAttribute('data-key'));
         else if (a === 'drawer-close') ctx.closeDrawer();
         return;
       }
@@ -658,7 +698,7 @@
       load: load, reset: reset, has: has, idx: idx, renderOA: renderOA, renderOADetail: renderOADetail, renderPO: renderPO, renderProgres: renderProgres,
       dashboard: dashboard, dueList: dueList, clientChips: function () { return clientChips(); }, oaTindakSelect: oaTindakSelect, clientBadge: clientBadge, uploadCard: uploadCard, clientName: clientName,
       lateCount: function () { return has() ? idx().pos.filter(function (x) { return x.late; }).length : 0; },
-      workdays: workdays, V: V
+      workdays: workdays, V: V, prRows: prRows, exRows: exRows, poNote: poNote, mimLine: mimLine, idr: idr, kurs: kurs, wkOk: wkOk, clientOk: clientOk, plantName: plantName, noteOf: noteOf, PO_ST: PO_ST, daysBadge: daysBadge
     };
   }
   root.SapMod = SapMod;

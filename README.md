@@ -36,6 +36,19 @@ Menu **Upload Data** → pilih beberapa file sekaligus. Jenis file & client dide
 - Filter **Semua client / 100 / 180** di setiap halaman. Total campuran IDR + USD memakai kurs di **Pengaturan → Monitoring SAP** (default 16.000).
 - Upload ulang file sejenis = data jenis itu diganti yang terbaru. Data tersimpan terenkripsi di `data/sap.js`.
 
+## Kontrak Warehouse & GS (per Field)
+
+Menu **Kontrak Warehouse** (Crane & Tronton, Picker/TMC & Trailer, Vacuum Truck, Issuing & Receiving) dan **Kontrak GS** (KRP, sepeda motor, VTS, cleaning service, pembabatan, listrik, AC, dll.). Data awal Field Rantau diimport dari file *TKDN / Anggaran Kontrak SCM*.
+
+- Kartu per kontrak: nilai (setelah amandemen), realisasi, sisa, % terserap vs % waktu, tagihan terakhir.
+- **Input tagihan** tiap awal bulan untuk bulan sebelumnya: periode, nilai tanpa PPN, PR, RO, SA, no. & tanggal invoice (boleh dilengkapi belakangan lewat tombol edit).
+- Bulan yang belum ditagih ditandai merah di kartu, di **matriks tagihan 12 bulan**, dan di Dashboard.
+- Filter per **Field**; kontrak field lain ditambah lewat **Tambah Kontrak** (pilih Kategori & Field).
+
+## Update status PO/RO oleh MIM
+
+Di menu **PO / RO (ME2N)** klik dokumen → bagian **Update status dari MIM**: status terkini (proses di vendor, siap kirim, dalam pengiriman, tiba di gudang, ditunda, kendala), perkiraan tiba (ETA) dan catatan. Riwayat update tersimpan; update tidak hilang saat data ME2N baru di-upload. Filter **Terlambat · belum ada update MIM** menunjukkan PO/RO yang perlu di-follow-up.
+
 ## Peran pengguna
 
 | Peran | Bisa apa |

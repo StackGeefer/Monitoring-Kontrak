@@ -69,7 +69,7 @@
     arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
   };
 
-  var APP_VERSION = '20261110g'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261111a'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Monitoring-Kontrak';
   var HERO = [{ path: 'assets/hero/pertamina-1-kilang.jpg', pos: '74% 40%' }, { path: 'assets/hero/pertamina-2-gudang.jpg', pos: '30% 60%' }];
   var ROLE_LABEL = { owner: 'Owner Utama', writer: 'Writer', viewer: 'Viewer' };
@@ -112,6 +112,18 @@
     settings: function () { return settings(); }, canWrite: function () { return canWrite(); }, me: function () { return me(); },
     warehouseUrl: function () { return warehouseUrl(); }, render: function () { render(); }, closeDrawer: function () { closeDrawer(); },
     ensureToken: function () { return ensureToken(); }, save: function (m, msg, x) { return save(m, msg, x); }
+  });
+
+  var Wh = WhMod({
+    S: S, esc: esc, ICON: ICON, Store: Store, Model: Model, BULAN: BULAN, nf0: nf0, nf2: nf2, fmtMoney: fmtMoney, fmtBig: fmtBig, fmtDate: fmtDate, pct: pct,
+    bar: function (p, c, t) { return bar(p, c, t); }, absorbCls: function (p) { return absorbCls(p); }, infos: function () { return infos(); },
+    settings: function () { return settings(); }, canWrite: function () { return canWrite(); }, render: function () { render(); },
+    toast: toast, loading: loading, loadXLSX: loadXLSX
+  });
+  var Dash = DashMod({
+    S: S, esc: esc, ICON: ICON, Model: Model, BLN: BLN, BULAN: BULAN, nf0: nf0, fmtMoney: fmtMoney, fmtBig: fmtBig, fmtDate: fmtDate, pct: pct, Sap: Sap, Wh: Wh,
+    bar: function (p, c, t) { return bar(p, c, t); }, absorbCls: function (p) { return absorbCls(p); }, settings: function () { return settings(); },
+    canWrite: function () { return canWrite(); }, me: function () { return me(); }
   });
 
   // ================= Peran =================
@@ -414,12 +426,14 @@
 
   // ================= Routing =================
   var TITLES = {
-    dashboard: ['Dashboard', 'Ringkasan kontrak OA, PO/RO, progres pengadaan & kontrak yang perlu ditindaklanjuti'],
+    dashboard: ['Dashboard', 'Analisa MIM — kontrak material, PO/RO, progres pengadaan, serta kontrak Warehouse & GS'],
     oa: ['Kontrak OA (ME3N)', 'Outline Agreement client 100 & 180 — masa berlaku, serapan nilai & RO yang sudah ditarik'],
     po: ['PO / RO (ME2N)', 'Purchase Order & Release Order — status pengiriman, keterlambatan & tagihan'],
     progres: ['Progres PR & PO', 'Status pengadaan (PR) & expediting PO/RO material stock Zona 1'],
-    kontrak: ['Daftar Kontrak (manual)', 'Kontrak jasa / SPK / kontrak di luar ME3N — realisasi, amandemen, jaminan & dokumen'],
-    'jatuh-tempo': ['Jatuh Tempo', 'OA (ME3N) & kontrak manual yang berakhir per bulan, beserta rencana tindak lanjutnya'],
+    wh: ['Kontrak Warehouse', 'Crane & Tronton, Picker & Trailer, Vacuum Truck, Issuing & Receiving — nilai, realisasi & tagihan bulanan per Field'],
+    gs: ['Kontrak GS', 'General Service — KRP, cleaning service, pembabatan, listrik, AC, dll. — nilai, realisasi & tagihan bulanan per Field'],
+    kontrak: ['Kontrak Lainnya', 'Kontrak di luar kategori Warehouse & GS'],
+    'jatuh-tempo': ['Jatuh Tempo', 'OA (ME3N) serta kontrak Warehouse & GS yang berakhir per bulan, beserta rencana tindak lanjutnya'],
     baru: ['Tambah Kontrak', 'Input kontrak baru secara manual'],
     edit: ['Edit Kontrak', ''],
     import: ['Upload Data', 'Upload data SAP (ME3N, ME2N) & progres PR/PO, atau tambah kontrak manual dari Excel'],
@@ -438,8 +452,10 @@
     if (WRITE_ROUTES[r.name] && !canWrite()) { location.replace('#/dashboard'); return; }
     $$('#nav a[data-route]').forEach(function (a) {
       var rn = a.getAttribute('data-route');
-      a.classList.toggle('active', rn === r.name || (r.name === 'edit' && rn === 'kontrak'));
-      a.classList.toggle('hidden', a.hasAttribute('data-write') && !canWrite());
+      var act = rn === r.name;
+      if (r.name === 'kontrak' || r.name === 'edit') { var kk = r.arg ? findK(r.arg) : null, kt = kk ? (kk.kat === 'Warehouse' ? 'wh' : kk.kat === 'GS' ? 'gs' : 'kontrak') : 'kontrak'; act = rn === kt; }
+      a.classList.toggle('active', act);
+      a.classList.toggle('hidden', (a.hasAttribute('data-write') && !canWrite()) || (rn === 'kontrak' && !S.D.list.some(function (x) { return !x.kat; })));
     });
     var t = TITLES[r.name];
     $('#pageTitle').textContent = t[0];
@@ -447,12 +463,14 @@
     $('#pageActions').innerHTML = '';
     closeDrawer();
     if (r.name === 'dashboard') renderDashboard();
-    else if (r.name === 'kontrak') { if (r.arg) renderDetail(r.arg); else renderList(); }
+    else if (r.name === 'kontrak') { if (r.arg) renderDetail(r.arg); else { S.f.kat = 'other'; renderList(); } }
     else if (r.name === 'jatuh-tempo') renderDue();
     else if (r.name === 'oa') { if (r.arg) Sap.renderOADetail(r.arg); else Sap.renderOA(); }
     else if (r.name === 'po') Sap.renderPO();
     else if (r.name === 'progres') Sap.renderProgres();
-    else if (r.name === 'baru') renderForm(null);
+    else if (r.name === 'wh') Wh.renderPage('Warehouse');
+    else if (r.name === 'gs') Wh.renderPage('GS');
+    else if (r.name === 'baru') renderForm(null, r.arg);
     else if (r.name === 'edit') renderForm(r.arg);
     else if (r.name === 'import') renderImport();
     else if (r.name === 'pengaturan') renderSettings();
@@ -506,82 +524,7 @@
   function curText(t) { var ks = Object.keys(t); return ks.length ? ks.map(function (c) { return fmtBig(t[c], c); }).join(' + ') : 'Rp 0'; }
 
   // ================= Dashboard =================
-  function renderDashboard() {
-    var sapHtml = Sap.dashboard();
-    if (!S.D.list.length) {
-      view.innerHTML = sapHtml ? sapHtml + '<div class="card card-pad small muted" style="line-height:1.6"><b>Kontrak manual</b> — kontrak jasa / SPK / sewa di luar ME3N bisa dicatat di <a href="#/kontrak">Daftar Kontrak</a> lengkap dengan realisasi, amandemen, jaminan & dokumen.</div>'
-        : (Sap.has() ? '' : '<div class="card card-pad" style="margin-bottom:14px"><b>Mulai monitoring:</b> upload export SAP <b>ME3N</b> & <b>ME2N</b> (client 100 / 180) dan file <b>Progres PR/RO</b> di <a href="#/import">Upload Data</a>.</div>') + (sapHtml || emptyState());
-      return;
-    }
-    var all = infos(), st = settings();
-    var open = all.filter(function (i) { return !i.closed; });
-    var running = open.filter(function (i) { return i.st !== 'expired'; });
-    var warn = open.filter(function (i) { return i.st === 'warn'; }), crit = open.filter(function (i) { return i.st === 'crit'; });
-    var exp = open.filter(function (i) { return i.st === 'expired'; });
-    var idr = running.filter(function (i) { return (i.k.cur || 'IDR') === 'IDR' && i.value > 0; });
-    var vSum = idr.reduce(function (a, i) { return a + i.value; }, 0), rSum = idr.reduce(function (a, i) { return a + i.real; }, 0);
-    function kpi(label, v, s, filter, cls) {
-      return '<a class="kpi kpi-click' + (cls ? ' kpi-' + cls : '') + '" href="#/kontrak" data-goto="' + filter + '"><div class="k">' + label + '</div><div class="v">' + v + '</div><div class="s">' + s + '</div></a>';
-    }
-    var kpis = '<div class="kpis" style="margin-bottom:16px">' +
-      kpi('Kontrak berjalan', nf0.format(running.length), 'Nilai ' + esc(curText(sumByCur(running, function (i) { return i.value; }))), 'open') +
-      kpi('Segera berakhir', nf0.format(warn.length), '≤ ' + st.warn + ' hari', 'warn', warn.length ? 'warn' : '') +
-      kpi('Kritis', nf0.format(crit.length), '≤ ' + st.crit + ' hari', 'crit', crit.length ? 'bad' : '') +
-      kpi('Lewat masa berlaku', nf0.format(exp.length), 'belum ditutup / diamandemen', 'expired', exp.length ? 'bad' : '') +
-      kpi('Serapan nilai', vSum ? pct(rSum / vSum * 100) : '—', esc(fmtBig(rSum)) + ' dari ' + esc(fmtBig(vSum)), 'open') +
-      '</div>';
-
-    // Perlu tindakan
-    var act = open.filter(function (i) { return i.flags.length; }).sort(function (a, b) {
-      var sa = a.flags.some(function (f) { return f.cls === 'bad'; }) ? 0 : 1, sb = b.flags.some(function (f) { return f.cls === 'bad'; }) ? 0 : 1;
-      return sa - sb || (a.days == null ? 1e9 : a.days) - (b.days == null ? 1e9 : b.days);
-    });
-    var actRows = act.slice(0, 12).map(function (i) {
-      return '<tr class="clickable" data-open="' + esc(i.k.id) + '"><td><div class="mono">' + esc(i.k.no) + '</div><div class="small muted">' + esc(i.k.jenis || '') + '</div></td>' +
-        '<td><div class="mat-desc">' + esc(i.k.judul || '—') + '</div><div class="small muted">' + esc(i.k.vendor || '') + '</div></td>' +
-        '<td class="nowrap">' + fmtDate(i.end) + '<div>' + daysBadge(i) + '</div></td>' +
-        '<td>' + i.flags.map(function (f) { return '<span class="badge ' + f.cls + ' flag">' + esc(f.t) + '</span>'; }).join(' ') + '</td></tr>';
-    }).join('');
-    var actCard = '<div class="card card-pad"><div class="toolbar" style="margin-bottom:10px"><h3 class="section-title" style="margin:0">Perlu tindakan</h3><span class="badge ' + (act.length ? 'bad' : 'ok') + '">' + act.length + '</span><span class="spacer"></span>' +
-      (act.length > 12 ? '<a class="small" href="#/kontrak" data-goto="flag">Lihat semua</a>' : '') + '</div>' +
-      (act.length ? '<div class="table-wrap" style="box-shadow:none"><table class="grid"><thead><tr><th>No. Kontrak</th><th>Pekerjaan / Vendor</th><th>Berakhir</th><th>Catatan</th></tr></thead><tbody>' + actRows + '</tbody></table></div>'
-        : '<p class="muted" style="margin:0">Tidak ada kontrak yang perlu tindakan. 👍</p>') + '</div>';
-
-    // Berakhir 12 bulan ke depan
-    var now = new Date(), months = [];
-    for (var m = 0; m < 12; m++) { var d = new Date(now.getFullYear(), now.getMonth() + m, 1); months.push(d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2)); }
-    var cnt = months.map(function (ym) { return open.filter(function (i) { return i.end && i.end.slice(0, 7) === ym; }); });
-    var max = Math.max.apply(null, cnt.map(function (c) { return c.length; }).concat([1]));
-    var bars = cnt.map(function (c, i) {
-      return '<a class="b' + (i === 0 ? ' cur' : '') + '" href="#/jatuh-tempo" style="height:' + Math.max(2, c.length / max * 100) + '%" title="' + esc(BULAN[+months[i].slice(5) - 1] + ' ' + months[i].slice(0, 4) + ': ' + c.length + ' kontrak' + (c.length ? ' — ' + c.slice(0, 6).map(function (x) { return x.k.no; }).join(', ') : '')) + '">' + (c.length ? '<span class="t">' + c.length + '</span>' : '') + '</a>';
-    }).join('');
-    var labels = months.map(function (ym) { return '<span>' + BLN[+ym.slice(5) - 1] + '<br>' + ym.slice(2, 4) + '</span>'; }).join('');
-    var dueCard = '<div class="card card-pad"><h3 class="section-title">Kontrak berakhir — 12 bulan ke depan</h3><div class="bars">' + bars + '</div><div class="bar-labels">' + labels + '</div></div>';
-
-    // Per jenis
-    var byJ = {};
-    running.forEach(function (i) {
-      var j = i.k.jenis || 'Lainnya', x = byJ[j] || (byJ[j] = { n: 0, v: 0, r: 0 });
-      x.n++;
-      if ((i.k.cur || 'IDR') === 'IDR') { x.v += i.value; x.r += i.real; }
-    });
-    var jRows = Object.keys(byJ).sort(function (a, b) { return byJ[b].v - byJ[a].v; }).map(function (j) {
-      var x = byJ[j], p = x.v ? x.r / x.v * 100 : null;
-      return '<tr><td><b>' + esc(j) + '</b></td><td class="num">' + x.n + '</td><td class="num nowrap">' + esc(fmtBig(x.v)) + '</td><td style="min-width:120px">' + bar(p, absorbCls(p)) + '<div class="small muted">' + pct(p) + ' terserap</div></td></tr>';
-    }).join('');
-    var jCard = '<div class="card card-pad"><h3 class="section-title">Kontrak berjalan per jenis</h3>' +
-      (jRows ? '<div class="table-wrap" style="box-shadow:none"><table class="grid"><thead><tr><th>Jenis</th><th class="num">Jml</th><th class="num">Nilai (IDR)</th><th>Serapan</th></tr></thead><tbody>' + jRows + '</tbody></table></div>' : '<p class="muted">—</p>') + '</div>';
-
-    // Aktivitas terbaru
-    var logs = [];
-    S.D.list.forEach(function (k) { (k.log || []).slice(0, 5).forEach(function (l) { logs.push({ k: k, l: l }); }); });
-    logs.sort(function (a, b) { return b.l.at < a.l.at ? -1 : 1; });
-    var logCard = '<div class="card card-pad"><h3 class="section-title">Aktivitas terbaru</h3>' + (logs.length ? '<div class="mk-log">' + logs.slice(0, 8).map(function (x) {
-      return '<a href="#/kontrak/' + esc(x.k.id) + '" class="mk-log-row"><span class="mono small">' + esc(x.k.no) + '</span><span>' + esc(x.l.msg) + '</span><span class="small muted nowrap">' + esc(x.l.by) + ' · ' + fmtDateTime(x.l.at) + '</span></a>';
-    }).join('') + '</div>' : '<p class="muted" style="margin:0">Belum ada aktivitas.</p>') + '</div>';
-
-    view.innerHTML = sapHtml + (sapHtml ? '<div class="sec-h"><h3>Kontrak manual</h3><a href="#/kontrak" class="small">Lihat semua →</a></div>' : '') + kpis + '<div class="mk-dash">' + actCard + '<div class="mk-dash-side">' + dueCard + jCard + '</div></div>' + '<div style="margin-top:16px">' + logCard + '</div>';
-  }
+  function renderDashboard() { $('#pageTitle').textContent = 'Dashboard'; Dash.render(view); }
 
   // ================= Daftar kontrak =================
   var LIST_ST = [['open', 'Semua berjalan'], ['active', 'Aktif'], ['warn', 'Segera berakhir'], ['crit', 'Kritis'], ['expired', 'Lewat masa berlaku'], ['flag', 'Perlu tindakan'], ['closed', 'Ditutup'], ['all', 'Semua']];
@@ -595,6 +538,7 @@
   function filtered() {
     var F = S.f, q = F.q.trim().toLowerCase();
     var list = infos().filter(function (i) {
+      if (i.k.kat) return false;
       if (!passSt(i, F.st)) return false;
       if (F.jenis && i.k.jenis !== F.jenis) return false;
       if (F.fungsi && i.k.fungsi !== F.fungsi) return false;
@@ -664,15 +608,16 @@
     var k = findK(id);
     if (!k) { view.innerHTML = '<div class="card empty"><h3>Kontrak tidak ditemukan</h3><p>Mungkin sudah dihapus.</p><a class="btn" href="#/kontrak">' + ICON.back + ' Kembali</a></div>'; return; }
     var i = Model.info(k, settings()), w = canWrite();
-    $('#pageTitle').textContent = 'Kontrak ' + k.no;
-    $('#pageSub').textContent = k.judul || '';
-    $('#pageActions').innerHTML = '<a class="btn" href="#/kontrak">' + ICON.back + ' Daftar</a>' + whLink(k) +
+    var backTo = k.kat === 'Warehouse' ? 'wh' : k.kat === 'GS' ? 'gs' : 'kontrak';
+    $('#pageTitle').textContent = k.short ? k.short + ' · ' + k.no : 'Kontrak ' + k.no;
+    $('#pageSub').textContent = k.kat ? 'Kontrak ' + k.kat + (k.field ? ' · Field ' + k.field : '') + ' · ' + (k.vendor || '') : (k.judul || '');
+    $('#pageActions').innerHTML = '<a class="btn" href="#/' + backTo + '">' + ICON.back + ' Daftar</a>' + (k.kat ? '' : whLink(k)) +
       (w ? '<a class="btn primary" href="#/edit/' + esc(k.id) + '">' + ICON.edit + ' Edit</a>' : '') +
       (isOwner() ? '<button class="btn danger" data-act="del-k" data-id="' + esc(k.id) + '">' + ICON.trash + ' Hapus</button>' : '');
 
     var head = '<div class="card head-card" style="margin-bottom:14px"><div><div class="toolbar" style="gap:8px"><span class="mono" style="font-weight:800;color:var(--brand);font-size:15px">' + esc(k.no) + '</span>' +
       '<span class="badge ro">' + esc(k.jenis || '—') + '</span>' + stBadge(i) + (k.sap ? '<span class="badge bau" title="Data dari ME3N ' + esc(k.sap.date || '') + '">SAP ME3N</span>' : '') + '</div>' +
-      '<h2>' + esc(k.judul || '—') + '</h2><div class="muted">' + esc(k.vendor || '') + (k.vendorCode ? ' <span class="mono small">(' + esc(k.vendorCode) + ')</span>' : '') + '</div>' +
+      (k.short ? '<h2>' + esc(k.short) + '</h2><div class="small" style="margin:2px 0 6px;line-height:1.5;max-width:900px">' + esc(k.judul || '') + '</div>' : '<h2>' + esc(k.judul || '—') + '</h2>') + '<div class="muted">' + esc(k.vendor || '') + (k.vendorCode ? ' <span class="mono small">(' + esc(k.vendorCode) + ')</span>' : '') + '</div>' +
       (i.flags.length ? '<div class="toolbar" style="margin-top:10px;gap:6px">' + i.flags.map(function (f) { return '<span class="badge ' + f.cls + '">⚠ ' + esc(f.t) + '</span>'; }).join('') + '</div>' : '') + '</div>' +
       '<div class="mk-tindak"><div class="small muted" style="font-weight:700;margin-bottom:4px">Tindak lanjut</div>' +
       (w ? '<select class="select" data-tindak="' + esc(k.id) + '">' + Object.keys(Model.TINDAK).map(function (t) { return '<option value="' + t + '"' + ((k.tindak || '') === t ? ' selected' : '') + '>' + Model.TINDAK[t] + '</option>'; }).join('') + '</select>'
@@ -703,16 +648,23 @@
         : '<p class="muted small" style="margin:0">Belum diisi' + (w ? ' — isi lewat tombol Edit.' : '.') + '</p>') + '</div>';
 
     // Realisasi
-    var rl = (k.realisasi || []).slice().sort(function (a, b) { return (b.tgl || '').localeCompare(a.tgl || ''); });
+    var rl = (k.realisasi || []).slice().sort(function (a, b) { return (a.periode || a.tgl || '').localeCompare(b.periode || b.tgl || ''); });
+    var cum = 0, bill = Wh.billing(i);
     var rlRows = rl.map(function (r) {
-      return '<tr><td class="nowrap">' + fmtDate(r.tgl) + '</td><td><div class="mono small">' + esc(r.ref || '') + '</div>' + esc(r.uraian || '') + '</td><td class="num nowrap"><b>' + esc(fmtMoney(+r.nilai, k.cur)) + '</b></td><td class="small muted">' + esc(r.by || '') + '</td>' +
-        (w ? '<td class="c"><button class="icon-btn" data-act="del-real" data-id="' + esc(k.id) + '" data-rid="' + esc(r.id) + '" title="Hapus">' + ICON.trash + '</button></td>' : '') + '</tr>';
-    }).join('');
-    var realCard = '<div class="card card-pad"><div class="toolbar" style="margin-bottom:10px"><h3 class="section-title" style="margin:0">Realisasi / pemakaian nilai</h3><span class="spacer"></span>' +
-      (w ? '<button class="btn sm primary" data-act="add-real" data-id="' + esc(k.id) + '">' + ICON.plus + ' Tambah realisasi</button>' : '') + '</div>' +
-      (rl.length ? '<div class="table-wrap" style="box-shadow:none"><table class="grid"><thead><tr><th>Tanggal</th><th>Referensi / uraian</th><th class="num">Nilai</th><th>Oleh</th>' + (w ? '<th></th>' : '') + '</tr></thead><tbody>' + rlRows +
-        '<tr class="total"><td colspan="2">Total realisasi</td><td class="num nowrap">' + esc(fmtMoney(i.real, k.cur)) + '</td><td colspan="' + (w ? 2 : 1) + '"></td></tr></tbody></table></div>'
-        : '<p class="muted small" style="margin:0">' + (k.sap ? 'Realisasi diambil dari data SAP ME3N (target − open value). Tambah catatan realisasi manual (Call-off / RO / BAPP) bila ingin dihitung manual.' : 'Belum ada realisasi. Catat setiap Call-off / RO / BAPP / invoice agar serapan nilai terpantau.') + '</p>') + '</div>';
+      cum += +r.nilai || 0;
+      var docs = [r.pr ? 'PR ' + r.pr : '', r.ro ? 'RO ' + r.ro : '', r.sa ? 'SA ' + r.sa : ''].filter(Boolean).map(function (d) { return '<span class="nowrap">' + esc(d) + '</span>'; }).join(' · ');
+      return '<tr><td class="nowrap"><b>' + (r.periode ? Wh.ymLabel(r.periode, true) : fmtDate(r.tgl)) + '</b>' + (r.uraian ? '<div class="small muted">' + esc(r.uraian) + '</div>' : '') + '</td>' +
+        '<td>' + (r.ref ? '<div class="small">' + esc(r.ref) + '</div>' : '') + (r.invTgl ? '<div class="small muted">' + fmtDate(r.invTgl) + '</div>' : '') + (!r.ref && !r.invTgl ? '<span class="badge warn">belum ada invoice</span>' : '') + '</td>' +
+        '<td class="mono small">' + (docs || '<span class="muted">—</span>') + '</td>' +
+        '<td class="num nowrap"><b>' + esc(fmtMoney(+r.nilai, k.cur)) + '</b></td><td class="num small muted nowrap">' + (i.value ? pct(cum / i.value * 100) : '') + '</td><td class="small muted">' + esc(r.by || '') + '</td>' +
+        (w ? '<td class="c nowrap"><button class="icon-btn" data-act="edit-real" data-id="' + esc(k.id) + '" data-rid="' + esc(r.id) + '" title="Edit">' + ICON.edit + '</button><button class="icon-btn" data-act="del-real" data-id="' + esc(k.id) + '" data-rid="' + esc(r.id) + '" title="Hapus">' + ICON.trash + '</button></td>' : '') + '</tr>';
+    }).reverse().join('');
+    var realCard = '<div class="card card-pad"><div class="toolbar" style="margin-bottom:10px"><h3 class="section-title" style="margin:0">Tagihan / realisasi per bulan</h3><span class="badge">' + rl.length + '</span><span class="spacer"></span>' +
+      (w ? '<button class="btn sm primary" data-act="add-real" data-id="' + esc(k.id) + '">' + ICON.plus + ' Input tagihan</button>' : '') + '</div>' +
+      (bill.missing.length ? '<div class="wh-alert small" style="margin-bottom:10px"><b>' + esc(Wh.missText(bill)) + '</b> — input tagihan bulan sebelumnya di awal bulan agar serapan nilai kontrak terpantau.</div>' : '') +
+      (rl.length ? '<div class="table-wrap" style="box-shadow:none;max-height:520px"><table class="grid"><thead><tr><th>Periode</th><th>Invoice</th><th>PR · RO · SA</th><th class="num">Nilai (tanpa PPN)</th><th class="num">Kum.</th><th>Oleh</th>' + (w ? '<th></th>' : '') + '</tr></thead><tbody>' + rlRows +
+        '<tr class="total"><td colspan="3">Total realisasi</td><td class="num nowrap">' + esc(fmtMoney(i.real, k.cur)) + '</td><td class="num small">' + pct(i.realPct) + '</td><td colspan="' + (w ? 2 : 1) + '"></td></tr></tbody></table></div>'
+        : '<p class="muted small" style="margin:0">' + (k.sap ? 'Realisasi diambil dari data SAP ME3N (target − open value).' : 'Belum ada tagihan. Catat tagihan tiap bulan (PR, RO, SA & invoice) agar serapan nilai kontrak terpantau.') + '</p>') + '</div>';
 
     // Amandemen
     var am = (k.amandemen || []).slice().sort(function (a, b) { return (a.tgl || '').localeCompare(b.tgl || ''); });
@@ -740,16 +692,17 @@
       return '<div class="mk-log-row"><span>' + esc(l.msg) + '</span><span class="small muted nowrap">' + esc(l.by) + ' · ' + fmtDateTime(l.at) + '</span></div>';
     }).join('') + '</div>' : '<p class="muted small" style="margin:0">—</p>') + '</div>';
 
-    view.innerHTML = head + kpis + '<div class="mk-detail"><div class="mk-col">' + infoCard + realCard + amCard + '</div><div class="mk-col">' + jamCard + docCard + logCard + '</div></div>';
+    view.innerHTML = head + kpis + (k.kat ? '<div style="margin-bottom:16px">' + realCard + '</div>' : '') + '<div class="mk-detail"><div class="mk-col">' + infoCard + (k.kat ? '' : realCard) + amCard + '</div><div class="mk-col">' + jamCard + docCard + logCard + '</div></div>';
   }
   function kv(label, val) { return '<div><span>' + label + '</span>' + val + '</div>'; }
   function fmtSize(b) { b = +b || 0; return b > 1048576 ? nf1.format(b / 1048576) + ' MB' : nf0.format(Math.max(1, b / 1024)) + ' KB'; }
 
   // ================= Form tambah / edit =================
-  function renderForm(id) {
+  function renderForm(id, preKat) {
     var k = id ? findK(id) : null;
     if (id && !k) { view.innerHTML = '<div class="card empty"><h3>Kontrak tidak ditemukan</h3></div>'; return; }
-    k = k || { cur: 'IDR', jenis: settings().jenis[0] };
+    k = k || { cur: 'IDR', jenis: settings().jenis[0], kat: preKat === 'Warehouse' || preKat === 'GS' ? preKat : '', field: Store.load('whField', '') || 'Rantau' };
+    var flds = {}; S.D.list.forEach(function (x) { if (x.field) flds[x.field] = 1; });
     if (id) { $('#pageTitle').textContent = 'Edit Kontrak ' + k.no; $('#pageSub').textContent = k.judul || ''; }
     var st = settings(), j = k.jaminan || {};
     var jenis = st.jenis.slice(); if (k.jenis && jenis.indexOf(k.jenis) < 0) jenis.push(k.jenis);
@@ -760,6 +713,9 @@
       '<h3 class="section-title">Data kontrak</h3><div class="fleet-form mk-form">' +
       fld('Nomor kontrak / OA *', inp('no', k.no, 'required placeholder="mis. 4610012345"')) +
       fld('Jenis kontrak', sel('jenis', jenis, k.jenis)) +
+      fld('Kategori', sel('kat', [['Warehouse', 'Kontrak Warehouse'], ['GS', 'Kontrak GS'], ['', 'Lainnya']], k.kat || '')) +
+      fld('Field', inp('field', k.field, 'list="dlField" placeholder="mis. Rantau"') + '<datalist id="dlField">' + Object.keys(flds).map(function (v) { return '<option value="' + esc(v) + '">'; }).join('') + '</datalist>') +
+      fld('Nama singkat (tampil di kartu)', inp('short', k.short, 'placeholder="mis. Crane 55 Ton & Tronton"'), 'wide') +
       fld('Judul / nama pekerjaan *', inp('judul', k.judul, 'required placeholder="mis. Pengadaan Valve & Fitting Zona 1"'), 'wide') +
       fld('Vendor / penyedia', inp('vendor', k.vendor, 'list="dlVendor"') + '<datalist id="dlVendor">' + Object.keys(vendors).map(function (v) { return '<option value="' + esc(v) + '">'; }).join('') + '</datalist>') +
       fld('Kode vendor (SAP)', inp('vendorCode', k.vendorCode)) +
@@ -776,12 +732,12 @@
       fld('Nomor jaminan', inp('jNo', j.no)) + fld('Penerbit (bank / asuransi)', inp('jBank', j.bank)) +
       fld('Nilai jaminan', inp('jNilai', j.nilai ? nf2.format(+j.nilai) : '', 'inputmode="decimal"')) + fld('Berlaku s/d', inp('jAkhir', j.akhir, 'type="date"')) +
       '</div><div class="fleet-actions" style="margin-top:18px"><button class="btn primary" type="submit">' + (id ? 'Simpan perubahan' : 'Simpan kontrak') + '</button>' +
-      '<a class="btn" href="' + (id ? '#/kontrak/' + esc(id) : '#/kontrak') + '">Batal</a><span class="small muted">* wajib diisi · tersimpan untuk semua pengguna ±1 menit setelah disimpan</span></div></form>';
+      '<a class="btn" href="' + (id ? '#/kontrak/' + esc(id) : '#/' + (k.kat === 'GS' ? 'gs' : k.kat === 'Warehouse' ? 'wh' : 'kontrak')) + '">Batal</a><span class="small muted">* wajib diisi · tersimpan untuk semua pengguna ±1 menit setelah disimpan</span></div></form>';
   }
   async function submitForm(form) {
     var id = form.getAttribute('data-id'), g = function (n) { var el = form.querySelector('[name="' + n + '"]'); return el ? el.value.trim() : ''; };
     var rec = {
-      no: g('no'), jenis: g('jenis'), judul: g('judul'), vendor: g('vendor'), vendorCode: g('vendorCode'), fungsi: g('fungsi'), pic: g('pic'),
+      no: g('no'), jenis: g('jenis'), kat: g('kat'), field: g('field'), short: g('short'), judul: g('judul'), vendor: g('vendor'), vendorCode: g('vendorCode'), fungsi: g('fungsi'), pic: g('pic'),
       mulai: g('mulai'), akhir: g('akhir'), nilai: parseNum(g('nilai')), cur: g('cur') || 'IDR', pg: g('pg').toUpperCase(), tindak: g('tindak'), catatan: g('catatan'),
       jaminan: { no: g('jNo'), bank: g('jBank'), nilai: parseNum(g('jNilai')), akhir: g('jAkhir') }
     };
@@ -805,23 +761,30 @@
   }
 
   // ================= Realisasi, amandemen, dokumen =================
-  async function addReal(id) {
+  async function addReal(id, rid) {
     var k = findK(id); if (!k) return;
-    var r = await modal('Tambah realisasi — ' + k.no,
-      '<div class="fleet-form">' + fld('Tanggal', inp('tgl', Model.todayStr(), 'type="date" required')) + fld('Nilai (' + esc(k.cur || 'IDR') + ')', inp('nilai', '', 'required inputmode="decimal" placeholder="mis. 125.000.000"')) +
-      fld('No. referensi (Call-off / RO / PO / BAPP / invoice)', inp('ref', ''), 'wide') + fld('Uraian', inp('uraian', ''), 'wide') + '</div>', 'Simpan',
-      { validate: function (o) { return !(parseNum(o.nilai) > 0) ? 'Nilai realisasi harus lebih dari 0' : !o.tgl ? 'Isi tanggal' : null; } });
+    var old = rid ? (k.realisasi || []).filter(function (x) { return x.id === rid; })[0] : null;
+    var bill = Wh.billing(Model.info(k, settings())), o = old || { periode: bill.missing[0] || Wh.prevMonth() };
+    var r = await modal((old ? 'Edit tagihan — ' : 'Input tagihan — ') + (k.short || k.no),
+      '<div class="fleet-form">' + fld('Periode (bulan pekerjaan) *', inp('periode', o.periode, 'type="month" required')) + fld('Nilai tanpa PPN (' + esc(k.cur || 'IDR') + ') *', inp('nilai', o.nilai ? nf2.format(+o.nilai) : '', 'required inputmode="decimal" placeholder="mis. 246.500.000"')) +
+      fld('No. PR', inp('pr', o.pr)) + fld('No. RO / PO', inp('ro', o.ro)) + fld('No. SA / BA', inp('sa', o.sa)) + fld('Tanggal invoice', inp('invTgl', o.invTgl, 'type="date"')) +
+      fld('No. invoice', inp('ref', o.ref), 'wide') + fld('Keterangan', inp('uraian', o.uraian, 'placeholder="mis. Termijn ke-36 / Tagihan-8"'), 'wide') + '</div>' +
+      '<p class="small muted" style="margin:10px 0 0">PR, RO, SA & invoice boleh dikosongkan dulu dan dilengkapi nanti lewat tombol edit.</p>', 'Simpan',
+      { validate: function (x) { return !(parseNum(x.nilai) > 0) ? 'Nilai tagihan harus lebih dari 0' : !/^\d{4}-\d{2}$/.test(x.periode) ? 'Pilih periode (bulan)' : null; } });
     if (!r) return;
-    var rid = uid('R'), rec = { id: rid, tgl: r.tgl, nilai: parseNum(r.nilai), ref: r.ref.trim(), uraian: r.uraian.trim(), by: me(), at: new Date().toISOString() };
+    var dup = (k.realisasi || []).filter(function (x) { return x.periode === r.periode && x.id !== rid; })[0];
+    if (dup && !(await confirmBox('Periode sudah ada', 'Tagihan <b>' + esc(Wh.ymLabel(r.periode, true)) + '</b> sudah tercatat (' + esc(fmtMoney(+dup.nilai, k.cur)) + '). Tambahkan sebagai tagihan kedua di bulan yang sama?', 'Tetap tambah'))) return;
+    var nid = rid || uid('R'), lastDay = new Date(+r.periode.slice(0, 4), +r.periode.slice(5, 7), 0).getDate();
+    var rec = Object.assign({}, old || {}, { id: nid, periode: r.periode, tgl: r.invTgl || r.periode + '-' + lastDay, nilai: parseNum(r.nilai), pr: r.pr.trim(), ro: r.ro.trim(), sa: r.sa.trim(), ref: r.ref.trim(), invTgl: r.invTgl, uraian: r.uraian.trim(), by: me(), at: new Date().toISOString() });
     if (await save(function (D) {
       var x = findK(id, D); if (!x) throw new Error('Kontrak sudah dihapus');
-      x.realisasi = (x.realisasi || []).filter(function (y) { return y.id !== rid; }).concat([rec]);
-      addLog(x, 'Realisasi ' + fmtMoney(rec.nilai, x.cur) + (rec.ref ? ' (' + rec.ref + ')' : ''));
-    }, 'Realisasi kontrak ' + k.no)) { toast('Realisasi dicatat'); render(); }
+      x.realisasi = (x.realisasi || []).filter(function (y) { return y.id !== nid; }).concat([rec]);
+      addLog(x, (old ? 'Tagihan diubah: ' : 'Tagihan ') + Wh.ymLabel(rec.periode, true) + ' ' + fmtMoney(rec.nilai, x.cur));
+    }, (old ? 'Edit tagihan ' : 'Tagihan ') + k.no + ' ' + rec.periode)) { toast(old ? 'Tagihan diperbarui' : 'Tagihan ' + Wh.ymLabel(rec.periode, true) + ' dicatat'); render(); }
   }
   async function delReal(id, rid) {
     var k = findK(id), r = k && (k.realisasi || []).filter(function (x) { return x.id === rid; })[0];
-    if (!r || !(await confirmBox('Hapus realisasi?', 'Realisasi ' + esc(fmtMoney(+r.nilai, k.cur)) + ' tanggal ' + fmtDate(r.tgl) + (r.ref ? ' (' + esc(r.ref) + ')' : '') + ' akan dihapus.', 'Hapus'))) return;
+    if (!r || !(await confirmBox('Hapus realisasi?', 'Tagihan ' + esc(fmtMoney(+r.nilai, k.cur)) + ' ' + (r.periode ? Wh.ymLabel(r.periode, true) : fmtDate(r.tgl)) + (r.ref ? ' (' + esc(r.ref) + ')' : '') + ' akan dihapus.', 'Hapus'))) return;
     if (await save(function (D) {
       var x = findK(id, D); if (!x) return;
       x.realisasi = (x.realisasi || []).filter(function (y) { return y.id !== rid; });
@@ -958,7 +921,7 @@
 
   // ================= Jatuh tempo =================
   function renderDue() {
-    $('#pageActions').innerHTML = '<select class="select" id="dueSrc">' + [['', 'OA SAP & kontrak manual'], ['sap', 'OA SAP (ME3N) saja'], ['manual', 'Kontrak manual saja']].map(function (o) { return '<option value="' + o[0] + '"' + ((S.dueSrc || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+    $('#pageActions').innerHTML = '<select class="select" id="dueSrc">' + [['', 'OA & kontrak Warehouse/GS'], ['sap', 'OA material (ME3N) saja'], ['manual', 'Kontrak Warehouse & GS saja']].map(function (o) { return '<option value="' + o[0] + '"' + ((S.dueSrc || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
       '<select class="select" id="dueH">' + [3, 6, 12, 24].map(function (n) { return '<option value="' + n + '"' + (S.dueH === n ? ' selected' : '') + '>' + n + ' bulan ke depan</option>'; }).join('') + '</select>';
     var w = canWrite(), st = settings(), notes = S.D.oaNotes || {};
     var items = [];
@@ -976,7 +939,7 @@
         if (it.m) {
           var i = it.m, k = i.k;
           return '<tr><td class="nowrap"><b>' + fmtDate(i.end) + '</b><div>' + dB(i.days) + '</div></td>' +
-            '<td><span class="badge">Manual</span> <a class="mono" href="#/kontrak/' + esc(k.id) + '" style="font-weight:700">' + esc(k.no) + '</a><div class="small muted">' + esc(k.jenis || '') + '</div></td>' +
+            '<td><span class="badge">' + esc(k.kat || 'Lainnya') + '</span> <a class="mono" href="#/kontrak/' + esc(k.id) + '" style="font-weight:700">' + esc(k.no) + '</a><div class="small muted">' + esc(k.jenis || '') + '</div></td>' +
             '<td class="mat-cell"><div class="mat-desc">' + esc(k.judul || '—') + '</div><div class="small muted">' + esc(k.vendor || '') + (k.pic ? ' · PIC ' + esc(k.pic) : '') + '</div></td>' +
             '<td style="min-width:120px">' + bar(i.realPct, absorbCls(i.realPct)) + '<div class="small muted">' + pct(i.realPct) + ' · sisa ' + esc(fmtBig(i.sisa, k.cur)) + '</div></td>' +
             '<td>' + (w ? tSel('data-tindak="' + esc(k.id) + '"', k.tindak) : '<span class="badge ' + (k.tindak ? 'ro' : 'warn') + '">' + esc(Model.TINDAK[k.tindak || '']) + '</span>') + '</td></tr>';
@@ -1467,6 +1430,7 @@
     else if (act === 'export') exportExcel();
     else if (act === 'tpl') downloadTemplate();
     else if (act === 'add-real') addReal(id);
+    else if (act === 'edit-real') addReal(id, b.getAttribute('data-rid'));
     else if (act === 'del-real') delReal(id, b.getAttribute('data-rid'));
     else if (act === 'add-am') addAm(id);
     else if (act === 'del-am') delAm(id, b.getAttribute('data-aid'));
