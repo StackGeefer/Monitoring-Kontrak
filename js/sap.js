@@ -480,13 +480,13 @@
       var rows = list.map(function (r, n) {
         return '<tr><td class="small muted">' + (n + 1) + '</td><td class="nowrap small">' + (r.tgl ? ctx.fmtDate(r.tgl) : '<span class="muted">—</span>') + '</td>' +
           '<td class="mono small">' + D(r.prq) + '</td><td class="mono small">' + (r.pr ? esc(r.pr).replace(/\s*&amp;\s*/g, '<br>') : '<span class="muted">—</span>') + '</td>' +
-          '<td style="min-width:190px"><div class="mat-desc">' + esc(r.desc) + '</div></td>' +
-          '<td><span class="badge ' + (PR_ST[r.stt] || (r.stt === 'Batal' ? '' : 'out')) + '">' + esc(r.stt) + '</span></td>' +
-          '<td class="small" style="min-width:140px">' + D(/cancel/i.test(r.note || '') && r.stt === 'Batal' ? '' : r.note) + '</td>' +
-          '<td class="small nowrap">' + D(r.wk) + ' ' + r.clients.map(clientBadge).join(' ') + '</td>' +
-          '<td class="num nowrap" title="' + (r.nilai != null ? esc(ctx.fmtMoney(r.nilai, r.cur)) : '') + '">' + (r.nilai != null ? '<b>' + esc(money(r.nilai, r.cur)) + '</b>' : '<span class="muted">—</span>') + '</td><td class="small">' + D(r.pic) + '</td>' +
+          '<td style="min-width:150px"><div class="mat-desc">' + esc(r.desc) + '</div></td>' +
+          '<td><span class="badge ' + (PR_ST[r.stt] || (r.stt === 'Batal' ? '' : 'out')) + '" title="' + esc(r.stt) + '">' + esc(r.stt.replace(' / belum PR', '').replace('Belum ada status', 'Belum ada')) + '</span></td>' +
+          '<td class="small" style="min-width:110px">' + D(/cancel/i.test(r.note || '') && r.stt === 'Batal' ? '' : r.note) + '</td>' +
+          '<td class="small">' + D(r.wk) + '<div>' + r.clients.map(clientBadge).join(' ') + '</div></td>' +
+          '<td class="num nowrap" title=""' + (r.nilai != null ? esc(ctx.fmtMoney(r.nilai, r.cur)) : '') + '">' + (r.nilai != null ? '<b>' + esc(money(r.nilai, r.cur)) + '</b>' : '<span class="muted">—</span>') + '</td><td class="small">' + D(r.pic) + '</td>' +
           '<td class="num">' + (r.lt != null ? '<span class="badge ' + (r.lt > 90 ? 'bad' : r.lt > 60 ? 'warn' : '') + '">' + r.lt + ' HK</span>' : '<span class="muted">—</span>') + '</td>' +
-          '<td class="small">' + D(r.vendor) + '</td>' + edC(r, 'pr') + '</tr>';
+          (ctx.canWrite() ? '<td class="c pick-col"><button class="btn sm" data-act="pr-edit" data-kind="pr" data-i="' + r._i + '">' + ICON.edit + ' Update</button></td>' : '') + '</tr>';
       }).join('');
       $('#prBox').innerHTML = '<div class="kpis" style="margin:14px 0">' +
         kpi('Rencana pengadaan', String(all.filter(function (r) { return r.stt !== 'Batal'; }).length), esc(sumCur(all.filter(function (r) { return r.stt !== 'Batal'; })))) +
@@ -499,7 +499,7 @@
         '<div class="card card-pad"><h3 class="section-title">Lead time (hari kerja)</h3>' + buckets + '</div></div>' +
         '<div class="card card-pad" style="margin-bottom:14px;display:flex;flex-direction:column;gap:12px"><div class="toolbar">' + searchBox('prq', F.q, 'Cari deskripsi, no. PR, WK/Field, PIC buyer…') + '</div>' +
         '<div class="chips"><span class="chip-toggle' + (!F.st ? ' on' : '') + '" data-prst="">Semua<span class="chip-n">' + all.length + '</span></span>' + sts.map(function (s) { return '<span class="chip-toggle' + (F.st === s ? ' on' : '') + '" data-prst="' + esc(s) + '">' + esc(s) + '<span class="chip-n">' + cnt[s] + '</span></span>'; }).join('') + '</div></div>' +
-        (list.length ? '<div class="table-wrap tall"><table class="grid"><thead><tr><th>No.</th><th>Tgl project req</th><th>Project Req. No.</th><th>No. PR</th><th>Deskripsi</th><th>Status</th><th>Tahapan / catatan</th><th>WK / Field</th><th class="num">Nilai</th><th>PIC buyer</th><th class="num">Lead time</th><th>Vendor</th><th>Diubah</th>' + (ctx.canWrite() ? '<th class="pick-col"></th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+        (list.length ? '<div class="table-wrap tall"><table class="grid"><thead><tr><th>No.</th><th>Tgl proj. req</th><th>Proj. Req. No.</th><th>No. PR</th><th>Deskripsi</th><th>Status</th><th>Tahapan / catatan</th><th>WK / Field</th><th class="num">Nilai</th><th>PIC buyer</th><th class="num">Lead time</th>' + (ctx.canWrite() ? '<th class="pick-col"></th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
           : '<div class="card empty"><h3>Tidak ada data yang cocok</h3></div>');
     }
     function renderExpediting() {
