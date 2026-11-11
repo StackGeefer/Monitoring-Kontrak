@@ -222,7 +222,7 @@
 
     // ================= PO / RO (ME2N) =================
     var PO_ST = { open: ['Dalam pengiriman', 'ro'], partial: ['Diterima sebagian', 'bau'], late: ['Terlambat', 'bad'], inv: ['Diterima · belum ditagih', 'warn'], done: ['Selesai', 'ok'] };
-    var PO_F = [['out', 'Outstanding'], ['late', 'Terlambat'], ['noupd', 'Terlambat · belum ada update MIM'], ['inv', 'Belum ditagih'], ['done', 'Selesai'], ['all', 'Semua']];
+    var PO_F = [['out', 'Outstanding'], ['late', 'Terlambat'], ['noupd', 'Belum di-update MIM'], ['inv', 'Belum ditagih'], ['done', 'Selesai'], ['all', 'Semua']];
     function poPass(x, s) { return s === 'noupd' ? (x.late && !poNote(x.c, x.no)) : s === 'all' ? true : s === 'out' ? x.out > 0.5 : s === 'inv' ? x.inv > 0.5 : x.st === s; }
     function poBadge(x) { var b = PO_ST[x.st]; return '<span class="badge ' + b[1] + '">' + b[0] + '</span>'; }
     function poHead() { return '<thead><tr><th>No. PO / RO</th><th>Vendor / material</th><th>Plant</th><th>Tgl dok.</th><th>Delivery</th><th class="num">Nilai</th><th>Penerimaan</th><th>Status</th></tr></thead>'; }
@@ -257,32 +257,59 @@
       });
       return list;
     }
+    function fieldSelect(id, val, plants) {
+      return '<label class="fld-pick"><span>Field</span><select class="select" id="' + id + '"><option value="">Overall · semua field</option>' + plants.map(function (p) {
+        return '<option value="' + esc(p) + '"' + (val === p ? ' selected' : '') + '>' + esc((plantName(p) ? plantName(p) + ' · ' : '') + p) + '</option>'; }).join('') + '</select></label>';
+    }
     function renderPO() {
       $('#pageActions').innerHTML = '<button class="btn" data-act="sap-export" data-what="po">' + ICON.excel + ' Export Excel</button>';
-      var view = $('#view');
+      var view = $('#view'), Vz = root.Viz, C = Vz.C;
       if (!idx().pos.length) { view.innerHTML = clientChips() + noData('PO / RO (ME2N)'); return; }
-      var F = V.po, all = idx().pos.filter(function (x) { return clientOk(x.c); });
+      var F = V.po, base = idx().pos.filter(function (x) { return clientOk(x.c); });
+      var plants = {}; base.forEach(function (x) { x.plants.forEach(function (p) { plants[p] = 1; }); });
+      var plist = Object.keys(plants).sort(function (a, b) { return (plantName(a) || a).localeCompare(plantName(b) || b); });
+      if (F.plant && !plants[F.plant]) F.plant = '';
+      var all = F.plant ? base.filter(function (x) { return x.plants.indexOf(F.plant) >= 0; }) : base;
       var out = all.filter(function (x) { return x.out > 0.5; }), late = all.filter(function (x) { return x.late; }), inv = all.filter(function (x) { return x.inv > 0.5; });
-      var plants = {}; all.forEach(function (x) { x.plants.forEach(function (p) { plants[p] = 1; }); });
-      // outstanding per plant
-      var byPl = {};
-      out.forEach(function (x) { x.p.items.forEach(function (i) { if (i[7] > 0) { var k = i[9] || '-'; byPl[k] = byPl[k] || { v: 0, docs: {}, late: {} }; byPl[k].v += idr(i[7], x.p.cur); byPl[k].docs[x.no] = 1; if (x.late) byPl[k].late[x.no] = 1; } }); });
-      var plRows = Object.keys(byPl).sort(function (a, b) { return byPl[b].v - byPl[a].v; }).map(function (k) {
-        var y = byPl[k], nl = Object.keys(y.late).length;
-        return '<button class="pl-chip' + (F.plant === k ? ' on' : '') + '" data-plant="' + esc(k) + '"><b>' + esc(k) + '</b> ' + esc(plantName(k)) + '<span>' + Object.keys(y.docs).length + ' dok · ' + esc(moneyIdr(y.v)) + (nl ? ' · <i>' + nl + ' terlambat</i>' : '') + '</span></button>';
+      var noUpd = late.filter(function (x) { return !poNote(x.c, x.no); });
+      var sv = function (l, f) { return sumIdr(l, f, function (x) { return x.p.cur; }); };
+      var n = function (st2) { return all.filter(function (x) { return x.st === st2; }).length; };
+      // kartu 2: per field (Overall) atau per vendor (satu field)
+      var second;
+      if (!F.plant) {
+        var byPl = {};
+        base.filter(function (x) { return x.out > 0.5; }).forEach(function (x) { x.p.items.forEach(function (i) { if (i[7] > 0) { var k = i[9] || '-', y = byPl[k] = byPl[k] || { v: 0, d: {}, l: {} }; y.v += idr(i[7], x.p.cur); y.d[x.no] = 1; if (x.late) y.l[x.no] = 1; } }); });
+        second = '<div class="card card-pad dc"><div class="dc-sub" style="margin-top:0">Sisa kirim per field <span class="small muted" style="text-transform:none;letter-spacing:0;font-weight:600">· klik untuk membuka</span></div>' +
+          Vz.hbars(Object.keys(byPl).sort(function (a, b) { return byPl[b].v - byPl[a].v; }).map(function (k) {
+            var y = byPl[k], nl = Object.keys(y.l).length;
+            return { label: '<b>' + esc(k) + '</b> ' + esc(plantName(k)), v: y.v, text: moneyIdr(y.v) + ' · ' + Object.keys(y.d).length + ' dok' + (nl ? ' · ' + nl + ' telat' : ''), attr: ' data-plant="' + esc(k) + '"', color: nl ? C.amber : null };
+          })) + '</div>';
+      } else {
+        var byV = {};
+        out.forEach(function (x) { var y = byV[x.p.vendor] = byV[x.p.vendor] || { v: 0, n: 0 }; y.v += idr(x.out, x.p.cur); y.n++; });
+        second = '<div class="card card-pad dc"><div class="dc-sub" style="margin-top:0">Vendor dengan sisa kirim terbesar</div>' +
+          (Object.keys(byV).length ? Vz.hbars(Object.keys(byV).sort(function (a, b) { return byV[b].v - byV[a].v; }).slice(0, 7).map(function (k) { return { label: esc(k), v: byV[k].v, text: moneyIdr(byV[k].v) + ' · ' + byV[k].n + ' dok', title: k }; })) : '<div class="muted small">Tidak ada outstanding</div>') + '</div>';
+      }
+      var worst = late.slice().sort(function (a, b) { return a.days - b.days; }).slice(0, 5).map(function (x) {
+        return '<div class="mini-row" data-pokey="' + esc(x.c + '/' + x.no) + '"><div style="min-width:0"><b class="mono">' + esc(x.no) + '</b><div class="small muted ell">' + esc(x.p.vendor) + '</div></div><div class="right"><span class="badge bad">lewat ' + ctx.nf0.format(-x.days) + ' hr</span><div class="small muted">' + esc(money(x.out, x.p.cur)) + '</div></div></div>';
       }).join('');
-      view.innerHTML = '<div class="toolbar" style="margin-bottom:12px">' + clientChips() + '<span class="spacer"></span>' + srcLine(['me2n-100', 'me2n-180']) + '</div>' +
+      view.innerHTML = '<div class="toolbar" style="margin-bottom:14px">' + clientChips() + fieldSelect('poplant', F.plant, plist) + '<span class="spacer"></span>' + srcLine(['me2n-100', 'me2n-180']) + '</div>' +
         '<div class="kpis" style="margin-bottom:14px">' +
-        kpi('Total PO / RO', ctx.nf0.format(all.length), esc(moneyIdr(sumIdr(all, function (x) { return x.val; }, function (x) { return x.p.cur; }))) + ' · ' + all.filter(function (x) { return x.type === 'RO'; }).length + ' RO, ' + all.filter(function (x) { return x.type === 'PO'; }).length + ' PO', '', ' data-post="all"') +
-        kpi('Outstanding', ctx.nf0.format(out.length), 'sisa kirim ' + esc(moneyIdr(sumIdr(out, function (x) { return x.out; }, function (x) { return x.p.cur; }))), out.length ? 'warn' : '', ' data-post="out"') +
-        kpi('Terlambat', ctx.nf0.format(late.length), esc(moneyIdr(sumIdr(late, function (x) { return x.out; }, function (x) { return x.p.cur; }))) + ' lewat delivery date', late.length ? 'bad' : '', ' data-post="late"') +
-        kpi('Terlambat · belum di-update', ctx.nf0.format(late.filter(function (x) { return !poNote(x.c, x.no); }).length), 'belum ada update status dari MIM', late.some(function (x) { return !poNote(x.c, x.no); }) ? 'bad' : 'ok', ' data-post="noupd"') +
-        kpi('Belum ditagih', ctx.nf0.format(inv.length), esc(moneyIdr(sumIdr(inv, function (x) { return x.inv; }, function (x) { return x.p.cur; }))) + ' still to be invoiced', '', ' data-post="inv"') + '</div>' +
-        (plRows ? '<div class="card card-pad" style="margin-bottom:14px"><div class="toolbar" style="margin-bottom:10px"><h3 class="section-title" style="margin:0">Outstanding per plant</h3><span class="small muted">klik untuk filter</span>' + (F.plant ? '<button class="btn sm" data-plant="">Semua plant</button>' : '') + '</div><div class="pl-grid">' + plRows + '</div></div>' : '') +
+        kpi('Total PO / RO', ctx.nf0.format(all.length), esc(moneyIdr(sv(all, function (x) { return x.val; }))), '', ' data-post="all"') +
+        kpi('Outstanding', ctx.nf0.format(out.length), 'sisa kirim ' + esc(moneyIdr(sv(out, function (x) { return x.out; }))), out.length ? 'warn' : '', ' data-post="out"') +
+        kpi('Terlambat', ctx.nf0.format(late.length), esc(moneyIdr(sv(late, function (x) { return x.out; }))), late.length ? 'bad' : 'ok', ' data-post="late"') +
+        kpi('Belum di-update MIM', ctx.nf0.format(noUpd.length), 'dari yang terlambat', noUpd.length ? 'bad' : 'ok', ' data-post="noupd"') +
+        kpi('Belum ditagih', ctx.nf0.format(inv.length), esc(moneyIdr(sv(inv, function (x) { return x.inv; }))), '', ' data-post="inv"') + '</div>' +
+        '<div class="dc-grid" style="margin-bottom:14px"><div class="card card-pad dc"><div class="dc-sub" style="margin-top:0">Status pengiriman' + (F.plant ? ' — ' + esc(plantName(F.plant) || F.plant) : '') + '</div>' + Vz.stack([
+          { label: 'Dalam pengiriman', n: n('open'), color: C.blue }, { label: 'Diterima sebagian', n: n('partial'), color: C.teal }, { label: 'Terlambat', n: n('late'), color: C.red },
+          { label: 'Belum ditagih', n: n('inv'), color: C.amber }, { label: 'Selesai', n: n('done'), color: C.gray }], 'dokumen') +
+          '<div class="dc-sub">Penerimaan nilai</div>' + bar(sv(all, function (x) { return x.val; }) ? (1 - sv(out, function (x) { return x.out; }) / sv(all, function (x) { return x.val; })) * 100 : null) +
+          '<div class="small muted" style="margin-top:4px">' + ctx.pct(sv(all, function (x) { return x.val; }) ? (1 - sv(out, function (x) { return x.out; }) / sv(all, function (x) { return x.val; })) * 100 : null) + ' nilai PO/RO sudah diterima</div></div>' +
+        second +
+        '<div class="card card-pad dc"><div class="dc-sub" style="margin-top:0">Paling lama terlambat</div>' + (worst || '<div class="muted small">Tidak ada yang terlambat 👍</div>') + '</div></div>' +
         '<div class="card card-pad" style="margin-bottom:14px;display:flex;flex-direction:column;gap:12px"><div class="toolbar">' + searchBox('poq', F.q, 'Cari no. PO/RO, vendor, material, OA, PR…') +
-        '<select class="select" id="potype"><option value="">PO & RO</option><option value="RO"' + (F.type === 'RO' ? ' selected' : '') + '>RO saja (call-off OA)</option><option value="PO"' + (F.type === 'PO' ? ' selected' : '') + '>PO saja</option></select>' +
-        '<select class="select" id="poplant"><option value="">Semua plant</option>' + Object.keys(plants).sort().map(function (p) { return '<option value="' + esc(p) + '"' + (F.plant === p ? ' selected' : '') + '>' + esc(p + (plantName(p) ? ' · ' + plantName(p) : '')) + '</option>'; }).join('') + '</select>' +
-        '<select class="select" id="posort">' + [['due', 'Urut: delivery paling dekat'], ['val', 'Urut: nilai outstanding'], ['new', 'Urut: dokumen terbaru'], ['no', 'Urut: nomor']].map(function (o) { return '<option value="' + o[0] + '"' + (F.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
+        '<select class="select" id="potype"><option value="">PO & RO</option><option value="RO"' + (F.type === 'RO' ? ' selected' : '') + '>RO saja</option><option value="PO"' + (F.type === 'PO' ? ' selected' : '') + '>PO saja</option></select>' +
+        '<select class="select" id="posort">' + [['due', 'Urut: delivery terdekat'], ['val', 'Urut: nilai outstanding'], ['new', 'Urut: dokumen terbaru'], ['no', 'Urut: nomor']].map(function (o) { return '<option value="' + o[0] + '"' + (F.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
         '<div class="chips">' + PO_F.map(function (o) { return '<span class="chip-toggle' + (F.st === o[0] ? ' on' : '') + '" data-post="' + o[0] + '">' + o[1] + '<span class="chip-n">' + all.filter(function (x) { return poPass(x, o[0]); }).length + '</span></span>'; }).join('') + '</div></div>' +
         '<div id="poList"></div>';
       poRows();
@@ -343,30 +370,82 @@
     }
 
     // ================= Progres PR & PO =================
-    var PR_ST = { 'On Progress': 'ro', 'On Planning': 'warn', 'On Review': 'bau', 'Need Confirmation': 'bad' };
+    var PR_ST = { Selesai: 'ok', 'On Progress': 'ro', 'On Planning': 'warn', 'On Review': 'bau', 'Need Confirmation': 'bad' };
     function prRows() {
       var P = (S.sap && S.sap.pr) || { pengadaan: [], expediting: [] }, t = today();
-      return P.pengadaan.map(function (r) {
-        var cancelled = /cancel|batal/i.test(r.note || '');
-        var stt = cancelled ? 'Batal' : r.st || (r.pr ? 'Belum ada status' : 'Pipeline / belum PR');
+      return P.pengadaan.map(function (r, _i) {
+        r = Object.assign({ _i: _i }, r);
+        var cancelled = /cancel|batal/i.test(r.note || '') || r.st === 'Batal';
+        var stt = cancelled ? 'Batal' : /selesai/i.test(r.st || '') ? 'Selesai' : r.st || (r.pr ? 'Belum ada status' : 'Pipeline / belum PR');
         var wd = r.tgl ? workdays(r.tgl, t) : null;
         return Object.assign({}, r, { stt: stt, lt: wd == null ? null : Math.max(0, wd - 1), clients: wkClients(r.wk) });
       });
     }
     function exRows() {
       var P = (S.sap && S.sap.pr) || { expediting: [] }, I = idx(), t = today();
-      return P.expediting.map(function (r) {
+      return P.expediting.map(function (r, _i) {
+        r = Object.assign({ _i: _i }, r);
         var sap = r.po ? I.poByNo[r.po] : null;
-        var got = sap && sap.out <= 0.5 && !/routing|approval/i.test(r.st);
-        var late = !got && (/late/i.test(r.st) || (/deliver/i.test(r.st) && r.deliv && r.deliv < t));
-        var stt = got ? 'Sudah diterima (SAP)' : /late/i.test(r.st) ? 'Outstanding (late)' : /routing|approval/i.test(r.st) ? 'Routing Approval' : /deliver/i.test(r.st) ? (r.deliv && r.deliv < t ? 'Lewat delivery date' : 'PO/RO on delivery') : (r.st || '—');
+        var fin = /selesai/i.test(r.st || '');
+        var got = !fin && sap && sap.out <= 0.5 && !/routing|approval/i.test(r.st);
+        var late = !got && !fin && (/late/i.test(r.st) || (/deliver/i.test(r.st) && r.deliv && r.deliv < t));
+        var stt = fin ? 'Selesai' : got ? 'Sudah diterima (SAP)' : /late/i.test(r.st) ? 'Outstanding (late)' : /routing|approval/i.test(r.st) ? 'Routing Approval' : /deliver/i.test(r.st) ? (r.deliv && r.deliv < t ? 'Lewat delivery date' : 'PO/RO on delivery') : (r.st || '—');
         return Object.assign({}, r, { sap: sap, late: late, stt: stt, days: r.deliv ? ctx.Model.dayDiff(t, r.deliv) : null, clients: wkClients(r.wk) });
       });
+    }
+    // ---------- edit langsung di website (tanpa upload ulang Excel) ----------
+    function edInfo(r, kind) {
+      return (r.ed ? '<div class="small muted" style="margin-top:4px">diubah ' + esc(r.ed.by) + ' · ' + ctx.fmtDate((r.ed.at || '').slice(0, 10)) + '</div>' : '') +
+        (ctx.canWrite() ? '<div style="margin-top:4px"><button class="btn sm" data-act="pr-edit" data-kind="' + kind + '" data-i="' + r._i + '">' + ICON.edit + ' Update</button></div>' : '');
+    }
+    async function saveSap(mutate, msg) {
+      if (!(await ctx.ensureToken())) { ctx.toast('Akses simpan belum aktif', true); return false; }
+      ctx.loading('Menyimpan…');
+      try {
+        var next = await ctx.GH.atomic({ path: 'data/sap.js', varName: 'MK_SAP', note: 'Data Monitoring SAP (ME3N, ME2N, Progres PR/PO)', key: S.key, message: msg + ' (' + ctx.me() + ')',
+          mutate: function (cur) { var D = cur || { v: 1, src: {}, oa: {}, po: {} }; D.pr = D.pr || { pengadaan: [], expediting: [], libur: [] }; mutate(D.pr); D.updatedAt = new Date().toISOString(); D.updatedBy = ctx.me(); return D; } });
+        S.sap = next; reset(); await ctx.Store.set('sap', next);
+        return true;
+      } catch (e) { ctx.toast('Gagal menyimpan: ' + e.message, true); return false; }
+      finally { ctx.loading(false); }
+    }
+    async function editProgres(kind, i) {
+      var P = (S.sap && S.sap.pr) || { pengadaan: [], expediting: [] }, isNew = i == null, f = ctx.fld, inp = ctx.inp, sel = ctx.sel;
+      var list = kind === 'pr' ? P.pengadaan : P.expediting, o = isNew ? { cur: 'IDR' } : list[i];
+      if (!o) return;
+      var nv = o.nilai != null ? ctx.nf2.format(o.nilai) : '', html;
+      if (kind === 'pr') html = '<div class="fleet-form">' + f('Deskripsi *', inp('desc', o.desc, 'required'), 'wide') +
+        f('Status', sel('st', [['', 'Pipeline / belum PR'], 'On Planning', 'On Progress', 'On Review', 'Need Confirmation', 'Selesai', 'Batal'], /cancel/i.test(o.note || '') ? 'Batal' : o.st || '')) + f('Tahapan / catatan', inp('note', o.note, 'placeholder="mis. Evaluasi teknis"')) +
+        f('No. PR', inp('pr', o.pr)) + f('Project Request No.', inp('prq', o.prq)) + f('Tgl project request', inp('tgl', o.tgl, 'type="date"')) + f('PIC buyer', inp('pic', o.pic)) +
+        f('WK / Field', inp('wk', o.wk, 'placeholder="mis. PEP Zona 1"')) + f('Vendor', inp('vendor', o.vendor)) + f('Nilai', inp('nilai', nv, 'inputmode="decimal"')) + f('Mata uang', sel('cur', ['IDR', 'USD'], o.cur || 'IDR')) + '</div>';
+      else html = '<div class="fleet-form">' + f('Deskripsi *', inp('desc', o.desc, 'required'), 'wide') +
+        f('Status', sel('st', ['PO/RO on delivery', 'Outstanding (late)', 'Routing Approval', 'Selesai'], /late/i.test(o.st || '') ? 'Outstanding (late)' : /routing/i.test(o.st || '') ? 'Routing Approval' : /selesai/i.test(o.st || '') ? 'Selesai' : 'PO/RO on delivery')) + f('Delivery date', inp('deliv', o.deliv, 'type="date"')) +
+        f('No. PO / RO', inp('po', o.po)) + f('No. PR', inp('pr', o.pr)) + f('WK / Field', inp('wk', o.wk, 'placeholder="mis. PEP Rantau"')) + f('Vendor', inp('vendor', o.vendor)) +
+        f('Nilai', inp('nilai', nv, 'inputmode="decimal"')) + f('Mata uang', sel('cur', ['IDR', 'USD'], o.cur || 'IDR')) + f('Catatan', inp('note', o.note), 'wide') + '</div>';
+      if (!isNew) html += '<label class="small" style="display:flex;gap:6px;align-items:center;margin-top:12px;color:var(--bad)"><input type="checkbox" name="del"> Hapus baris ini</label>';
+      var r = await ctx.modal((isNew ? 'Tambah ' : 'Update ') + (kind === 'pr' ? 'pengadaan' : 'PO / RO'), html, 'Simpan', { validate: function (x) { return !x.desc.trim() ? 'Isi deskripsi' : null; } });
+      if (!r) return;
+      var rec = Object.assign({}, o);
+      Object.keys(r).forEach(function (k) { if (k !== 'del' && k !== 'nilai') rec[k] = String(r[k]).trim(); });
+      rec.nilai = ctx.parseNum(r.nilai); delete rec._i;
+      if (kind === 'pr' && rec.st === 'Batal' && /cancel/i.test(rec.note || '')) rec.note = '';
+      rec.ed = { by: ctx.me(), at: new Date().toISOString() };
+      var key = JSON.stringify(isNew ? null : [o.desc, o.pr, o.po]);
+      var ok = await saveSap(function (pr) {
+        var L = kind === 'pr' ? (pr.pengadaan = pr.pengadaan || []) : (pr.expediting = pr.expediting || []);
+        if (isNew) { L.push(rec); return; }
+        var j = L[i] && JSON.stringify([L[i].desc, L[i].pr, L[i].po]) === key ? i : -1;
+        if (j < 0) for (var q = 0; q < L.length; q++) if (JSON.stringify([L[q].desc, L[q].pr, L[q].po]) === key) { j = q; break; }
+        if (j < 0) throw new Error('Baris sudah berubah — muat ulang halaman');
+        if (r.del) L.splice(j, 1); else L[j] = rec;
+      }, (r.del ? 'Hapus' : isNew ? 'Tambah' : 'Update') + ' progres ' + (kind === 'pr' ? 'pengadaan' : 'PO/RO') + ': ' + rec.desc);
+      if (ok) { ctx.toast(r.del ? 'Baris dihapus' : 'Progres disimpan'); ctx.render(); }
     }
     function bucket(lt) { return lt == null ? 'Tanggal belum diisi' : lt <= 30 ? '0–30 HK' : lt <= 60 ? '31–60 HK' : lt <= 90 ? '61–90 HK' : '> 90 HK'; }
     function renderProgres() {
       var view = $('#view'), P = S.sap && S.sap.pr;
-      $('#pageActions').innerHTML = P ? '<button class="btn" data-act="sap-export" data-what="pr">' + ICON.excel + ' Export Excel</button>' : '';
+      $('#pageActions').innerHTML = (P ? '<button class="btn" data-act="sap-export" data-what="pr">' + ICON.excel + ' Export Excel</button>' : '') +
+        (ctx.canWrite() ? '<button class="btn primary" data-act="pr-add">' + ICON.plus + ' Tambah ' + (V.pr.tab === 'pengadaan' ? 'pengadaan' : 'PO / RO') + '</button>' : '');
       if (!P) { view.innerHTML = clientChips() + noData('Progres PR & PO'); return; }
       var tab = V.pr.tab;
       var src = S.sap.src && S.sap.src.progres;
@@ -400,7 +479,7 @@
           '<td class="mono small">' + esc(r.pr || '—') + '</td><td><div class="mat-desc">' + esc(r.desc) + '</div><div class="small muted">' + esc(r.wk || '') + ' ' + r.clients.map(clientBadge).join(' ') + '</div></td>' +
           '<td class="num nowrap">' + (r.nilai != null ? '<b>' + esc(money(r.nilai, r.cur)) + '</b>' : '<span class="muted">—</span>') + '</td><td class="small">' + esc(r.pic || '—') + '</td>' +
           '<td class="num">' + (r.lt != null ? '<span class="badge ' + (r.lt > 90 ? 'bad' : r.lt > 60 ? 'warn' : '') + '">' + r.lt + ' HK</span>' : '<span class="muted">—</span>') + '</td>' +
-          '<td><span class="badge ' + (PR_ST[r.stt] || (r.stt === 'Batal' ? '' : 'out')) + '">' + esc(r.stt) + '</span>' + (r.note ? '<div class="small" style="margin-top:4px">' + esc(r.note) + '</div>' : '') + '</td></tr>';
+          '<td><span class="badge ' + (PR_ST[r.stt] || (r.stt === 'Batal' ? '' : 'out')) + '">' + esc(r.stt) + '</span>' + (r.note ? '<div class="small" style="margin-top:4px">' + esc(r.note) + '</div>' : '') + edInfo(r, 'pr') + '</td></tr>';
       }).join('');
       $('#prBox').innerHTML = '<div class="kpis" style="margin:14px 0">' +
         kpi('Rencana pengadaan', String(all.filter(function (r) { return r.stt !== 'Batal'; }).length), esc(sumCur(all.filter(function (r) { return r.stt !== 'Batal'; })))) +
@@ -408,9 +487,9 @@
         kpi('On Planning', String(plan.length), esc(sumCur(plan)), plan.length ? 'warn' : '', ' data-prst="On Planning"') +
         kpi('Pipeline / belum PR', String(pipe.length), 'RFI, drafting, mapping item', '', ' data-prst="Pipeline / belum PR"') +
         kpi('Lead time > 90 HK', String(bk['> 90 HK'] || 0), 'sejak project request (hari kerja)', bk['> 90 HK'] ? 'bad' : '') + '</div>' +
-        '<div class="mk-dash" style="margin-bottom:14px"><div class="card card-pad"><h3 class="section-title">Tahapan pengadaan berjalan (Status/Note)</h3><div class="chips">' +
+        '<div class="mk-dash" style="margin-bottom:14px"><div class="card card-pad"><h3 class="section-title">Tahapan berjalan</h3><div class="chips">' +
         Object.keys(stage).sort(function (a, b) { return stage[b] - stage[a]; }).map(function (k) { return '<span class="stage-chip">' + esc(k) + ' <b>' + stage[k] + '</b></span>'; }).join('') + '</div></div>' +
-        '<div class="card card-pad"><h3 class="section-title">Lead time sejak project request</h3>' + buckets + '<div class="small muted" style="margin-top:8px">Hari kerja (tanpa Sabtu, Minggu & libur nasional) dihitung otomatis s/d hari ini.</div></div></div>' +
+        '<div class="card card-pad"><h3 class="section-title">Lead time (hari kerja)</h3>' + buckets + '</div></div>' +
         '<div class="card card-pad" style="margin-bottom:14px;display:flex;flex-direction:column;gap:12px"><div class="toolbar">' + searchBox('prq', F.q, 'Cari deskripsi, no. PR, WK/Field, PIC buyer…') + '</div>' +
         '<div class="chips"><span class="chip-toggle' + (!F.st ? ' on' : '') + '" data-prst="">Semua<span class="chip-n">' + all.length + '</span></span>' + sts.map(function (s) { return '<span class="chip-toggle' + (F.st === s ? ' on' : '') + '" data-prst="' + esc(s) + '">' + esc(s) + '<span class="chip-n">' + cnt[s] + '</span></span>'; }).join('') + '</div></div>' +
         (list.length ? '<div class="table-wrap tall"><table class="grid"><thead><tr><th>No.</th><th>Tgl project req</th><th>No. PR</th><th>Deskripsi / WK</th><th class="num">Nilai</th><th>PIC buyer</th><th class="num">Lead time</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
@@ -436,7 +515,7 @@
           '<td><div class="mat-desc">' + esc(r.desc) + '</div><div class="small muted">' + esc(r.vendor || '') + '</div></td><td class="small">' + esc(r.wk) + ' ' + r.clients.map(clientBadge).join(' ') + '</td>' +
           '<td class="num nowrap"><b>' + (r.nilai != null ? esc(money(r.nilai, r.cur)) : '—') + '</b></td>' +
           '<td class="nowrap small"><b>' + (r.deliv ? ctx.fmtDate(r.deliv) : '—') + '</b>' + (r.days != null && !(s && s.out <= 0.5) ? '<div>' + (r.days < 0 ? '<span class="badge bad">lewat ' + (-r.days) + ' hr</span>' : '<span class="small muted">' + r.days + ' hari lagi</span>') + '</div>' : '') + '</td>' +
-          '<td><span class="badge ' + (r.late ? 'bad' : /Routing/.test(r.stt) ? 'warn' : /SAP/.test(r.stt) ? 'ok' : 'ro') + '">' + esc(r.stt) + '</span>' + (r.note ? '<div class="small" style="margin-top:4px">' + esc(r.note) + '</div>' : '') + sapTxt + (s && s.out > 0.5 ? mimLine(poNote(s.c, s.no)) : '') + '</td></tr>';
+          '<td><span class="badge ' + (r.late ? 'bad' : /Routing/.test(r.stt) ? 'warn' : /SAP|Selesai/.test(r.stt) ? 'ok' : 'ro') + '">' + esc(r.stt) + '</span>' + (r.note ? '<div class="small" style="margin-top:4px">' + esc(r.note) + '</div>' : '') + sapTxt + (s && s.out > 0.5 ? mimLine(poNote(s.c, s.no)) : '') + edInfo(r, 'ex') + '</td></tr>';
       }).join('');
       $('#prBox').innerHTML = '<div class="kpis" style="margin:14px 0">' +
         kpi('Total PO / RO', String(all.length), esc(sumCur(all)), '', ' data-prst=""') +
@@ -446,7 +525,7 @@
         kpi('Sudah diterima (SAP)', String(sapDone.length), 'GR penuh di ME2N — perbarui status di file progres', sapDone.length ? 'ok' : '', ' data-prst="Sudah diterima (SAP)"') + '</div>' +
         '<div class="mk-dash" style="margin-bottom:14px"><div class="card card-pad" style="display:flex;flex-direction:column;gap:12px"><div class="toolbar">' + searchBox('prq', F.q, 'Cari deskripsi, no. PO/RO, PR, vendor…') + '</div>' +
         '<div class="chips"><span class="chip-toggle' + (!F.st ? ' on' : '') + '" data-prst="">Semua<span class="chip-n">' + all.length + '</span></span>' + Object.keys(cnt).sort().map(function (s) { return '<span class="chip-toggle' + (F.st === s ? ' on' : '') + '" data-prst="' + esc(s) + '">' + esc(s) + '<span class="chip-n">' + cnt[s] + '</span></span>'; }).join('') + '</div>' +
-        '<div class="small muted">Kolom status SAP diambil otomatis dari data ME2N (penerimaan barang & sisa kirim). Klik baris untuk melihat item PO/RO.</div></div>' +
+        '</div>' +
         '<div class="card card-pad"><h3 class="section-title">Status PO/RO per WK/Field</h3><div class="table-wrap" style="box-shadow:none"><table class="grid"><thead><tr><th>WK/Field</th><th class="num" title="PO/RO on delivery">Kirim</th><th class="num">Late</th><th class="num" title="Routing approval">Appr.</th><th class="num" title="Sudah diterima penuh di SAP">GR</th><th class="num">Total</th></tr></thead><tbody>' + wkRows + '</tbody></table></div></div></div>' +
         (list.length ? '<div class="table-wrap tall"><table class="grid"><thead><tr><th>No. PO/RO · PR</th><th>Deskripsi / vendor</th><th>WK/Field</th><th class="num">Nilai</th><th>Deliv date</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
           : '<div class="card empty"><h3>Tidak ada data yang cocok</h3></div>');
@@ -509,9 +588,8 @@
     function uploadCard() {
       var src = (S.sap && S.sap.src) || {};
       var keys = [['me3n-100', 'ME3N · Client 100'], ['me3n-180', 'ME3N · Client 180'], ['me2n-100', 'ME2N · Client 100'], ['me2n-180', 'ME2N · Client 180'], ['progres', 'Progres PR & PO']];
-      return '<div class="card card-pad" style="margin-bottom:16px"><div class="toolbar" style="align-items:flex-start"><div style="flex:1;min-width:260px"><h3 style="margin:0 0 6px">' + ICON.upload.replace('<svg', '<svg style="width:18px;height:18px;vertical-align:-3px"') + ' Upload data Monitoring SAP</h3>' +
-        '<p class="small muted" style="margin:0;line-height:1.6">Pilih beberapa file sekaligus: export <b>ME3N</b> (kontrak OA), <b>ME2N</b> (PO/RO) client 100 & 180, dan file <b>Progres PR/RO</b> (sheet Pengadaan & Expediting). ' +
-        'Jenis file & client dideteksi otomatis (nama file berisi <span class="mono">_100_</span> / <span class="mono">_180_</span>). Upload ulang = data jenis itu diganti yang terbaru.</p></div>' +
+      return '<div class="card card-pad" style="margin-bottom:16px"><div class="toolbar" style="align-items:flex-start"><div style="flex:1;min-width:260px"><h3 style="margin:0 0 6px">' + ICON.upload.replace('<svg', '<svg style="width:18px;height:18px;vertical-align:-3px"') + ' Upload data SAP</h3>' +
+        '<p class="small muted" style="margin:0">ME3N &amp; ME2N (client 100 / 180) dan file Progres PR/RO — bisa beberapa file sekaligus, jenis &amp; client terdeteksi otomatis.</p></div>' +
         (ctx.canWrite() ? '<label class="btn primary">' + ICON.upload + ' Pilih file Excel<input type="file" id="sapFiles" accept=".xlsx,.xls,.xlsm" multiple hidden></label>' : '') + '</div>' +
         '<div class="src-grid">' + keys.map(function (k) {
           var x = src[k[0]];
@@ -645,7 +723,7 @@
       if ((b = t.closest('[data-post]'))) { V.po.st = b.getAttribute('data-post'); V.po.n = PAGE; renderPO(); return; }
       if ((b = t.closest('[data-post-go]'))) { V.po.st = b.getAttribute('data-post-go'); return; }
       if ((b = t.closest('[data-plant]'))) { var pl = b.getAttribute('data-plant'); V.po.plant = V.po.plant === pl ? '' : pl; V.po.n = PAGE; renderPO(); return; }
-      if ((b = t.closest('[data-prtab]'))) { V.pr.tab = b.getAttribute('data-prtab'); V.pr.st = ''; V.pr.q = ''; renderProgres(); return; }
+      if ((b = t.closest('[data-prtab]'))) { V.pr.tab = b.getAttribute('data-prtab'); V.pr.st = ''; V.pr.q = ''; ctx.render(); return; }
       if ((b = t.closest('[data-prst]'))) { V.pr.st = b.getAttribute('data-prst'); if (V.pr.tab === 'pengadaan') renderPengadaan(); else renderExpediting(); return; }
       if (t.closest('a,button,select,input,textarea')) {
         b = t.closest('[data-act]');
@@ -658,9 +736,12 @@
         else if (a === 'sap-cancel') { S.sapPending = null; ctx.render(); }
         else if (a === 'oa-note') saveNote(b.getAttribute('data-key'));
         else if (a === 'po-note') savePoNote(b.getAttribute('data-key'));
+        else if (a === 'pr-edit') editProgres(b.getAttribute('data-kind'), +b.getAttribute('data-i'));
+        else if (a === 'pr-add') editProgres(V.pr.tab === 'pengadaan' ? 'pr' : 'ex', null);
         else if (a === 'drawer-close') ctx.closeDrawer();
         return;
       }
+      if ((b = t.closest('[data-pokey]'))) { openPO(b.getAttribute('data-pokey')); return; }
       var tr = t.closest('tr[data-oa]');
       if (tr) { location.hash = '#/oa/' + tr.getAttribute('data-oa'); return; }
       tr = t.closest('tr[data-po]');

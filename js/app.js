@@ -69,10 +69,10 @@
     arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
   };
 
-  var APP_VERSION = '20261111a'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261111b'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Monitoring-Kontrak';
   var HERO = [{ path: 'assets/hero/pertamina-1-kilang.jpg', pos: '74% 40%' }, { path: 'assets/hero/pertamina-2-gudang.jpg', pos: '30% 60%' }];
-  var ROLE_LABEL = { owner: 'Owner Utama', writer: 'Writer', viewer: 'Viewer' };
+  var ROLE_LABEL = { owner: 'Owner Utama', writer: 'Owner', viewer: 'Reader' };
   var DOC_CATS = ['Kontrak', 'Amandemen', 'Jaminan Pelaksanaan', 'BAPP / BAST', 'Invoice', 'Korespondensi', 'Lainnya'];
 
   // ================= State =================
@@ -111,7 +111,8 @@
     bar: function (p, c, t) { return bar(p, c, t); }, toast: toast, loading: loading, loadScript: loadScript, loadXLSX: loadXLSX,
     settings: function () { return settings(); }, canWrite: function () { return canWrite(); }, me: function () { return me(); },
     warehouseUrl: function () { return warehouseUrl(); }, render: function () { render(); }, closeDrawer: function () { closeDrawer(); },
-    ensureToken: function () { return ensureToken(); }, save: function (m, msg, x) { return save(m, msg, x); }
+    ensureToken: function () { return ensureToken(); }, save: function (m, msg, x) { return save(m, msg, x); },
+    modal: modal, confirmBox: confirmBox, fld: fld, inp: inp, sel: sel, parseNum: parseNum, nf2: nf2
   });
 
   var Wh = WhMod({
@@ -131,7 +132,7 @@
   function isOwner() { return role() === 'owner'; }
   function canWrite() { return Vault.canWrite(role()); }
   function roleLabel(r) { return ROLE_LABEL[r] || r; }
-  function roleBadge(r) { return '<span class="badge ' + ({ owner: 'ok', writer: 'ro' }[r] || '') + '">' + roleLabel(r) + '</span>'; }
+  function roleBadge(r) { return '<span class="badge ' + ({ owner: 'ok', writer: 'ok' }[r] || '') + '">' + roleLabel(r) + '</span>'; }
   function me() { return S.user ? S.user.name : ''; }
 
   // ================= UI dasar =================
@@ -426,18 +427,18 @@
 
   // ================= Routing =================
   var TITLES = {
-    dashboard: ['Dashboard', 'Analisa MIM — kontrak material, PO/RO, progres pengadaan, serta kontrak Warehouse & GS'],
-    oa: ['Kontrak OA (ME3N)', 'Outline Agreement client 100 & 180 — masa berlaku, serapan nilai & RO yang sudah ditarik'],
-    po: ['PO / RO (ME2N)', 'Purchase Order & Release Order — status pengiriman, keterlambatan & tagihan'],
-    progres: ['Progres PR & PO', 'Status pengadaan (PR) & expediting PO/RO material stock Zona 1'],
-    wh: ['Kontrak Warehouse', 'Crane & Tronton, Picker & Trailer, Vacuum Truck, Issuing & Receiving — nilai, realisasi & tagihan bulanan per Field'],
-    gs: ['Kontrak GS', 'General Service — KRP, cleaning service, pembabatan, listrik, AC, dll. — nilai, realisasi & tagihan bulanan per Field'],
-    kontrak: ['Kontrak Lainnya', 'Kontrak di luar kategori Warehouse & GS'],
-    'jatuh-tempo': ['Jatuh Tempo', 'OA (ME3N) serta kontrak Warehouse & GS yang berakhir per bulan, beserta rencana tindak lanjutnya'],
-    baru: ['Tambah Kontrak', 'Input kontrak baru secara manual'],
+    dashboard: ['Dashboard', 'Ringkasan seluruh kontrak & hal yang perlu ditindaklanjuti'],
+    oa: ['Kontrak OA', 'Outline Agreement · ME3N'],
+    po: ['PO / RO', 'Purchase Order & Release Order · ME2N'],
+    progres: ['Progres PR & PO', 'Pengadaan & expediting material stock'],
+    wh: ['Kontrak Warehouse', 'Nilai, realisasi & tagihan bulanan per Field'],
+    gs: ['Kontrak GS', 'Nilai, realisasi & tagihan bulanan per Field'],
+    kontrak: ['Kontrak Lainnya', ''],
+    'jatuh-tempo': ['Jatuh Tempo', 'Kontrak yang berakhir per bulan & tindak lanjutnya'],
+    baru: ['Tambah Kontrak', ''],
     edit: ['Edit Kontrak', ''],
-    import: ['Upload Data', 'Upload data SAP (ME3N, ME2N) & progres PR/PO, atau tambah kontrak manual dari Excel'],
-    pengaturan: ['Pengaturan', 'Akun, pengguna (Writer/Viewer), koneksi GitHub, pengingat & integrasi Warehouse']
+    import: ['Data SAP', 'Upload ME3N, ME2N & progres PR/PO · penyimpanan'],
+    pengaturan: ['Pengaturan', '']
   };
   var WRITE_ROUTES = { baru: 1, edit: 1, import: 1 };
   function currentRoute() {
@@ -479,6 +480,8 @@
         (isOwner() ? 'Isi token GitHub sekali di Pengaturan → Koneksi GitHub. Setelah itu Writer otomatis ikut bisa menyimpan.' : 'Minta Owner Utama mengisi token GitHub di Pengaturan → Koneksi GitHub.') + '</div></div>' +
         (isOwner() && r.name !== 'pengaturan' ? '<a class="btn primary" href="#/pengaturan">Hubungkan GitHub</a>' : '') + '</div>');
     }
+    if (r.name !== 'pengaturan') view.insertAdjacentHTML('beforeend', '<div class="last-edit small muted">Terakhir diubah: <b>' + esc(S.D.updatedBy || '—') + '</b> · ' + fmtDateTime(S.D.updatedAt) +
+      (S.sap && S.sap.updatedAt ? ' &nbsp;|&nbsp; Data SAP: <b>' + esc(S.sap.updatedBy || '—') + '</b> · ' + fmtDateTime(S.sap.updatedAt) : '') + '</div>');
     renderSide();
     window.scrollTo(0, 0);
   }
@@ -613,7 +616,7 @@
     $('#pageSub').textContent = k.kat ? 'Kontrak ' + k.kat + (k.field ? ' · Field ' + k.field : '') + ' · ' + (k.vendor || '') : (k.judul || '');
     $('#pageActions').innerHTML = '<a class="btn" href="#/' + backTo + '">' + ICON.back + ' Daftar</a>' + (k.kat ? '' : whLink(k)) +
       (w ? '<a class="btn primary" href="#/edit/' + esc(k.id) + '">' + ICON.edit + ' Edit</a>' : '') +
-      (isOwner() ? '<button class="btn danger" data-act="del-k" data-id="' + esc(k.id) + '">' + ICON.trash + ' Hapus</button>' : '');
+      (w ? '<button class="btn danger" data-act="del-k" data-id="' + esc(k.id) + '">' + ICON.trash + ' Hapus</button>' : '');
 
     var head = '<div class="card head-card" style="margin-bottom:14px"><div><div class="toolbar" style="gap:8px"><span class="mono" style="font-weight:800;color:var(--brand);font-size:15px">' + esc(k.no) + '</span>' +
       '<span class="badge ro">' + esc(k.jenis || '—') + '</span>' + stBadge(i) + (k.sap ? '<span class="badge bau" title="Data dari ME3N ' + esc(k.sap.date || '') + '">SAP ME3N</span>' : '') + '</div>' +
@@ -656,13 +659,13 @@
       return '<tr><td class="nowrap"><b>' + (r.periode ? Wh.ymLabel(r.periode, true) : fmtDate(r.tgl)) + '</b>' + (r.uraian ? '<div class="small muted">' + esc(r.uraian) + '</div>' : '') + '</td>' +
         '<td>' + (r.ref ? '<div class="small">' + esc(r.ref) + '</div>' : '') + (r.invTgl ? '<div class="small muted">' + fmtDate(r.invTgl) + '</div>' : '') + (!r.ref && !r.invTgl ? '<span class="badge warn">belum ada invoice</span>' : '') + '</td>' +
         '<td class="mono small">' + (docs || '<span class="muted">—</span>') + '</td>' +
-        '<td class="num nowrap"><b>' + esc(fmtMoney(+r.nilai, k.cur)) + '</b></td><td class="num small muted nowrap">' + (i.value ? pct(cum / i.value * 100) : '') + '</td><td class="small muted">' + esc(r.by || '') + '</td>' +
+        '<td class="num nowrap"><b>' + esc(fmtMoney(+r.nilai, k.cur)) + '</b></td><td class="num small muted nowrap">' + (i.value ? pct(cum / i.value * 100) : '') + '</td><td class="small muted nowrap">' + esc(r.by || '') + (r.at ? '<div>' + fmtDate(r.at.slice(0, 10)) + '</div>' : '') + '</td>' +
         (w ? '<td class="c nowrap"><button class="icon-btn" data-act="edit-real" data-id="' + esc(k.id) + '" data-rid="' + esc(r.id) + '" title="Edit">' + ICON.edit + '</button><button class="icon-btn" data-act="del-real" data-id="' + esc(k.id) + '" data-rid="' + esc(r.id) + '" title="Hapus">' + ICON.trash + '</button></td>' : '') + '</tr>';
     }).reverse().join('');
     var realCard = '<div class="card card-pad"><div class="toolbar" style="margin-bottom:10px"><h3 class="section-title" style="margin:0">Tagihan / realisasi per bulan</h3><span class="badge">' + rl.length + '</span><span class="spacer"></span>' +
       (w ? '<button class="btn sm primary" data-act="add-real" data-id="' + esc(k.id) + '">' + ICON.plus + ' Input tagihan</button>' : '') + '</div>' +
       (bill.missing.length ? '<div class="wh-alert small" style="margin-bottom:10px"><b>' + esc(Wh.missText(bill)) + '</b> — input tagihan bulan sebelumnya di awal bulan agar serapan nilai kontrak terpantau.</div>' : '') +
-      (rl.length ? '<div class="table-wrap" style="box-shadow:none;max-height:520px"><table class="grid"><thead><tr><th>Periode</th><th>Invoice</th><th>PR · RO · SA</th><th class="num">Nilai (tanpa PPN)</th><th class="num">Kum.</th><th>Oleh</th>' + (w ? '<th></th>' : '') + '</tr></thead><tbody>' + rlRows +
+      (rl.length ? '<div class="table-wrap" style="box-shadow:none;max-height:520px"><table class="grid"><thead><tr><th>Periode</th><th>Invoice</th><th>PR · RO · SA</th><th class="num">Nilai (tanpa PPN)</th><th class="num">Kum.</th><th>Diubah</th>' + (w ? '<th></th>' : '') + '</tr></thead><tbody>' + rlRows +
         '<tr class="total"><td colspan="3">Total realisasi</td><td class="num nowrap">' + esc(fmtMoney(i.real, k.cur)) + '</td><td class="num small">' + pct(i.realPct) + '</td><td colspan="' + (w ? 2 : 1) + '"></td></tr></tbody></table></div>'
         : '<p class="muted small" style="margin:0">' + (k.sap ? 'Realisasi diambil dari data SAP ME3N (target − open value).' : 'Belum ada tagihan. Catat tagihan tiap bulan (PR, RO, SA & invoice) agar serapan nilai kontrak terpantau.') + '</p>') + '</div>';
 
@@ -830,7 +833,7 @@
     render();
   }
   async function delK(id) {
-    var k = findK(id); if (!k || !isOwner()) return;
+    var k = findK(id); if (!k || !canWrite()) return;
     if (!(await confirmBox('Hapus kontrak?', 'Kontrak <b>' + esc(k.no) + '</b> — ' + esc(k.judul || '') + ' beserta realisasi, amandemen & ' + (k.docs || []).length + ' dokumen akan dihapus. Tercatat di History hapus.', 'Hapus kontrak'))) return;
     var dels = (k.docs || []).map(function (d) { return d.path; });
     if (await save(function (D) {
@@ -960,8 +963,6 @@
       html += '<div class="mk-due-group' + (soon ? ' bad' : '') + '"><h3>' + BULAN[+ym.slice(5) - 1] + ' ' + ym.slice(0, 4) + ' <span class="badge ' + (soon ? 'bad' : 'warn') + '">' + g.length + ' kontrak</span></h3><div class="table-wrap"><table class="grid">' + head + '<tbody>' + rows(g) + '</tbody></table></div></div>';
     });
     view.innerHTML = (Sap.has() ? '<div class="toolbar" style="margin-bottom:12px">' + Sap.clientChips() + '</div>' : '') +
-      '<div class="card card-pad small muted" style="margin-bottom:14px;line-height:1.6">Status: <span class="badge warn">Segera berakhir</span> ≤ ' + st.warn + ' hari · <span class="badge bad">Kritis</span> ≤ ' + st.crit + ' hari. ' +
-      'Kontrak yang sudah <b>Selesai / ditutup</b> tidak ditampilkan. Pilih rencana tindak lanjut (amandemen / pengadaan ulang) agar tim tahu kontrak mana yang sedang diproses.' + (Sap.has() && Sap.V.client ? ' Filter client: <b>' + esc(Sap.V.client + ' · ' + Sap.clientName(Sap.V.client)) + '</b>.' : '') + '</div>' +
       (html || '<div class="card empty"><h3>Tidak ada kontrak yang berakhir dalam ' + S.dueH + ' bulan ke depan</h3></div>');
   }
 
@@ -1016,12 +1017,15 @@
   // ================= Import =================
   function renderImport() {
     var wh = warehouseUrl(), I = S.imp;
-    view.innerHTML = Sap.uploadCard() + '<div class="sec-h"><h3>Tambah ke Daftar Kontrak (manual)</h3></div><div class="ds-grid" style="margin-bottom:16px">' +
+    view.innerHTML = Sap.uploadCard() + '<div class="card card-pad" id="storageCard" style="margin-bottom:16px"><h4 class="section-title">Penyimpanan GitHub</h4><div class="small muted">Menghitung…</div></div>' +
+      '<details class="card set-sec"' + (I ? ' open' : '') + '><summary><span class="set-t">Import kontrak dari Excel / Warehouse</span><span class="set-chev"></span></summary><div class="set-body"><div class="ds-grid" style="margin-bottom:16px">' +
       '<div class="card ds-card"><h4>' + ICON.link + ' Ambil dari Material Warehouse</h4><p class="small muted" style="margin:0;line-height:1.6">Tarik daftar OA dari data <b>ME3N</b> yang sudah di-upload di website <a href="' + esc(wh) + '" target="_blank" rel="noopener">Material Warehouse</a> — tanpa upload ulang. ' +
       'Perlu akun Warehouse (otomatis bila Anda sedang login Warehouse di browser ini).</p><div class="toolbar" style="margin-top:auto"><button class="btn primary" data-act="imp-wh">' + ICON.link + ' Ambil data ME3N Warehouse</button></div></div>' +
       '<div class="card ds-card"><h4>' + ICON.upload + ' Upload file Excel</h4><p class="small muted" style="margin:0;line-height:1.6">File export <b>ME3N</b> SAP (dideteksi otomatis dari judul kolom), atau <b>template Excel</b> daftar kontrak (kontrak jasa, SPK, dll. yang tidak ada di ME3N).</p>' +
       '<div class="toolbar" style="margin-top:auto"><label class="btn primary">' + ICON.upload + ' Pilih file Excel<input type="file" id="impFile" accept=".xlsx,.xls,.xlsm" hidden></label><button class="btn" data-act="tpl">' + ICON.excel + ' Download template</button></div></div></div>' +
-      '<div id="impBox">' + (I ? '' : '<div class="card card-pad small muted" style="line-height:1.7"><b>Cara kerja import:</b><ul style="margin:6px 0 0;padding-left:18px"><li>Nomor kontrak yang <b>belum ada</b> → ditambahkan sebagai kontrak baru.</li><li>Nomor yang <b>sudah ada</b> → data SAP (periode, nilai target, realisasi/open value) diperbarui. Judul, PIC, catatan, realisasi manual, amandemen & dokumen <b>tidak</b> ditimpa.</li><li>Pilih dulu baris yang akan diimport di tabel preview — tidak ada yang tersimpan sebelum klik <b>Import</b>.</li></ul></div>') + '</div>';
+      '<div id="impBox">' + (I ? '' : '<div class="card card-pad small muted" style="line-height:1.7"><b>Cara kerja import:</b><ul style="margin:6px 0 0;padding-left:18px"><li>Nomor kontrak yang <b>belum ada</b> → ditambahkan sebagai kontrak baru.</li><li>Nomor yang <b>sudah ada</b> → data SAP (periode, nilai target, realisasi/open value) diperbarui. Judul, PIC, catatan, realisasi manual, amandemen & dokumen <b>tidak</b> ditimpa.</li><li>Pilih dulu baris yang akan diimport di tabel preview — tidak ada yang tersimpan sebelum klik <b>Import</b>.</li></ul></div>') + '</div></div></details>';
+    fillStorage();
+
     if (I) renderImpTable();
   }
   function impFiltered() {
@@ -1129,6 +1133,54 @@
     });
     var seen = {};
     return out.filter(function (r) { if (seen[r.no]) return false; seen[r.no] = 1; return true; });
+  }
+
+  // ---------- Penyimpanan GitHub ----------
+  function sizeTxt(b) {
+    if (b == null) return '—';
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return (b / 1024).toFixed(1).replace('.', ',') + ' KB';
+    if (b < 1073741824) return (b / 1048576).toFixed(1).replace('.', ',') + ' MB';
+    return (b / 1073741824).toFixed(2).replace('.', ',') + ' GB';
+  }
+  function storageGroup(path) {
+    if (path === 'data/sap.js') return 'Data SAP (ME3N, ME2N, progres)';
+    if (path === 'data/kontrak.js') return 'Kontrak Warehouse & GS + tagihan';
+    if (/^data\/files\//.test(path)) return 'Dokumen kontrak (PDF)';
+    if (/^data\//.test(path)) return 'Data lain (pengguna, token)';
+    if (/^assets\//.test(path)) return 'Foto & gambar';
+    if (/^vendor\//.test(path)) return 'Library (Excel, PDF)';
+    return 'Kode website (HTML, JS, CSS)';
+  }
+  async function fillStorage(force) {
+    var box = $('#storageCard');
+    if (!box) return;
+    var GB = 1073741824;
+    var head = '<h4 class="section-title" style="display:flex;align-items:center">Penyimpanan GitHub<span class="spacer"></span><button class="btn sm" data-act="storage-refresh">Hitung ulang</button></h4>';
+    var sb = function (used) { var p = Math.min(100, used / GB * 100); return '<div class="progress storage-bar' + (p >= 90 ? ' bad' : p >= 70 ? ' warn' : '') + '"><i style="width:' + Math.max(p, 0.6).toFixed(1) + '%"></i></div>'; };
+    if (!GH.hasToken()) { box.innerHTML = head + '<div class="small muted">Perlu koneksi GitHub (Pengaturan → Koneksi GitHub).</div>'; return; }
+    if (force) box.innerHTML = head + '<div class="small muted">Menghitung…</div>';
+    try {
+      var info = await GH.req('GET', ''), tree = await GH.req('GET', '/git/trees/' + GH.BRANCH + '?recursive=1');
+      var groups = {}, total = 0, files = [];
+      tree.tree.forEach(function (e) {
+        if (e.type !== 'blob') return;
+        total += e.size || 0; files.push(e);
+        var g = storageGroup(e.path);
+        (groups[g] = groups[g] || { size: 0, n: 0 }).size += e.size || 0; groups[g].n++;
+      });
+      if (!box.isConnected) return;
+      var repo = (info.size || 0) * 1024;
+      var gl = Object.keys(groups).sort(function (a, b) { return groups[b].size - groups[a].size; });
+      var big = files.sort(function (a, b) { return (b.size || 0) - (a.size || 0); }).slice(0, 6);
+      box.innerHTML = head + '<div class="storage-grid">' +
+        '<div class="storage-kpi"><div class="k">Website (file yang tayang)</div><div class="v">' + sizeTxt(total) + '</div>' + sb(total) + '<div class="s">' + (total / GB * 100).toFixed(2).replace('.', ',') + '% dari batas GitHub Pages 1 GB · ' + files.length + ' file</div></div>' +
+        '<div class="storage-kpi"><div class="k">Repo GitHub (termasuk riwayat versi)</div><div class="v">' + sizeTxt(repo) + '</div>' + sb(repo) + '<div class="s">' + (repo / GB * 100).toFixed(2).replace('.', ',') + '% dari anjuran 1 GB</div></div></div>' +
+        '<div class="storage-cols"><div><div class="small" style="font-weight:700;margin:10px 0 6px">Rincian isi website</div><table class="grid"><tbody>' +
+        gl.map(function (g) { return '<tr><td>' + esc(g) + '<div class="small muted">' + groups[g].n + ' file</div></td><td class="num"><b>' + sizeTxt(groups[g].size) + '</b></td><td class="num small muted">' + (groups[g].size / total * 100).toFixed(1).replace('.', ',') + '%</td></tr>'; }).join('') +
+        '</tbody></table></div><div><div class="small" style="font-weight:700;margin:10px 0 6px">File terbesar</div><table class="grid"><tbody>' +
+        big.map(function (e) { return '<tr><td class="mono small" style="word-break:break-all">' + esc(e.path) + '</td><td class="num"><b>' + sizeTxt(e.size) + '</b></td></tr>'; }).join('') + '</tbody></table></div></div>';
+    } catch (e) { box.innerHTML = head + '<div class="small" style="color:var(--bad)">Gagal membaca dari GitHub: ' + esc(e.message) + '</div>'; }
   }
 
   // ---------- Koneksi ke Material Warehouse ----------
@@ -1244,10 +1296,9 @@
         '<div><div style="font-weight:700;margin-bottom:6px">Tambah pengguna</div><form id="addUser" class="toolbar" autocomplete="off">' +
         '<input class="input sm" name="u" placeholder="Username" required autocomplete="off">' +
         '<input class="input sm" type="password" name="pw" placeholder="Password" required minlength="6" autocomplete="new-password">' +
-        '<select class="select sm" name="role"><option value="writer">Writer (kontributor — tambah/edit kontrak &amp; upload data)</option><option value="viewer">Viewer (lihat &amp; export saja)</option></select>' +
+        '<select class="select sm" name="role"><option value="writer">Owner (bisa mengedit)</option><option value="viewer">Reader (lihat saja)</option></select>' +
         '<button class="btn sm primary" type="submit">Tambah</button></form></div>' + pwBox + '</div>' +
-        '<div class="small muted" style="margin-top:10px;line-height:1.6"><b>Owner Utama</b>: atur token GitHub &amp; pengguna, hapus kontrak. <b>Writer</b> (kontributor): tambah/edit kontrak, realisasi, amandemen, dokumen, tindak lanjut OA, upload data SAP &amp; progres — penyimpanan memakai token Owner Utama yang tersimpan terenkripsi, jadi Writer tidak perlu akun GitHub. ' +
-        '<b>Viewer</b>: lihat semua halaman &amp; export Excel. Untuk Writer, isi password orang tersebut (lama atau baru) agar akses simpannya terkunci untuk dia. Password minimal 6 karakter.</div>');
+        '<div class="small muted" style="margin-top:10px"><b>Owner</b> bisa mengedit semua data · <b>Reader</b> hanya melihat · pengguna &amp; token GitHub diatur Owner Utama.</div>');
     } else if (w) {
       users = sec('Akun saya', pwBox);
     }
@@ -1428,6 +1479,7 @@
     if (act === 'toggle-pw') { var p = $('#lgPw'); p.type = p.type === 'password' ? 'text' : 'password'; b.classList.toggle('on', p.type === 'text'); }
     else if (act === 'logout') logout();
     else if (act === 'export') exportExcel();
+    else if (act === 'storage-refresh') fillStorage(true);
     else if (act === 'tpl') downloadTemplate();
     else if (act === 'add-real') addReal(id);
     else if (act === 'edit-real') addReal(id, b.getAttribute('data-rid'));

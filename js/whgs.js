@@ -70,6 +70,11 @@
       return a >= 1e9 ? ctx.nf2.format(n / 1e9) + ' M' : a >= 1e6 ? ctx.nf0.format(n / 1e6) + ' jt' : ctx.nf0.format(n);
     }
 
+    function lastEdit(k) {
+      var at = k.editedAt || k.createdAt || '', by = k.editedBy || k.createdBy || '';
+      (k.realisasi || []).forEach(function (r) { if (r.at && r.at > at) { at = r.at; by = r.by; } });
+      return at ? 'Diubah ' + esc(by || '') + ' · ' + ctx.fmtDate(at.slice(0, 10)) : '';
+    }
     function card(x) {
       var i = x.i, k = x.k, b = x.b, w = ctx.canWrite(), cls = ctx.absorbCls(i.realPct);
       return '<div class="wh-card' + (b.missing.length ? ' miss' : '') + '" data-k="' + esc(k.id) + '">' +
@@ -78,7 +83,8 @@
         '<div class="wh-nums"><div><span>Nilai kontrak</span><b>' + esc(ctx.fmtBig(i.value, k.cur)) + '</b></div><div><span>Realisasi</span><b>' + esc(ctx.fmtBig(i.real, k.cur)) + '</b></div><div><span>Sisa</span><b' + (i.sisa < 0 ? ' style="color:var(--bad)"' : '') + '>' + esc(ctx.fmtBig(i.sisa, k.cur)) + '</b></div></div>' +
         ctx.bar(i.realPct, cls, 'Terserap ' + ctx.pct(i.realPct)) + '<div class="wh-meta small muted"><span>' + ctx.pct(i.realPct) + ' nilai terserap</span><span>' + ctx.pct(i.timePct) + ' waktu berjalan</span></div>' +
         '<div class="wh-foot"><div class="small">' + (b.last ? 'Tagihan terakhir <b>' + ymLabel(b.last, true) + '</b> · ' + esc(ctx.fmtBig(b.lastVal, k.cur)) : (k.realisasi || []).length ? (k.realisasi.length + ' tagihan tercatat') : 'Belum ada tagihan') +
-        (b.missing.length ? '<div><span class="badge bad">' + esc(missText(b)) + '</span></div>' : b.known && !i.closed && i.days >= 0 ? '<div><span class="badge ok">Tagihan s/d ' + ymLabel(prevMonth()) + ' lengkap</span></div>' : '') + '</div>' +
+        (b.missing.length ? '<div><span class="badge bad">' + esc(missText(b)) + '</span></div>' : b.known && !i.closed && i.days >= 0 ? '<div><span class="badge ok">Tagihan s/d ' + ymLabel(prevMonth()) + ' lengkap</span></div>' : '') +
+        '<div class="small muted" style="margin-top:4px">' + lastEdit(k) + '</div></div>' +
         (w && !i.closed ? '<button class="btn sm primary" data-act="add-real" data-id="' + esc(k.id) + '">' + ICON.plus + ' Input tagihan</button>' : '') + '</div></div>';
     }
 

@@ -18,25 +18,31 @@
   };
   function svg(k) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + IC[k] + '</svg>'; }
 
+  function escH(x) { return String(x == null ? '' : x).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  var nfV = new Intl.NumberFormat('id-ID');
+  // batang bertumpuk: [{label, n, color}] — celah 2px antar segmen, legenda berlabel + angka
+  function stack(parts, unit) {
+    var tot = parts.reduce(function (a, p) { return a + p.n; }, 0);
+    if (!tot) return '<div class="muted small">Belum ada data</div>';
+    return '<div class="st-bar">' + parts.filter(function (p) { return p.n; }).map(function (p) {
+      return '<i style="flex:' + p.n + ';background:' + p.color + '" title="' + escH(p.label + ': ' + nfV.format(p.n) + ' ' + (unit || '') + ' (' + Math.round(p.n / tot * 100) + '%)') + '"></i>';
+    }).join('') + '</div><div class="st-leg">' + parts.map(function (p) {
+      return '<span><i style="background:' + p.color + '"></i>' + escH(p.label) + ' <b>' + nfV.format(p.n) + '</b></span>';
+    }).join('') + '</div>';
+  }
+  // batang mendatar: [{label(html), v, text, title, attr}]
+  function hbars(rows) {
+    var max = Math.max.apply(null, rows.map(function (r) { return r.v; }).concat([1]));
+    return '<div class="hb">' + rows.map(function (r) {
+      return '<div class="hb-row' + (r.attr ? ' click' : '') + '"' + (r.attr || '') + ' title="' + escH(r.title || '') + '"><span class="hb-l">' + r.label + '</span><div class="hb-t"><i style="width:' + Math.max(1.5, r.v / max * 100).toFixed(1) + '%' + (r.color ? ';background:' + r.color : '') + '"></i></div><span class="hb-v">' + escH(r.text) + '</span></div>';
+    }).join('') + '</div>';
+  }
+  root.Viz = { stack: stack, hbars: hbars, C: C, svg: svg };
+
   function DashMod(ctx) {
     var S = ctx.S, esc = ctx.esc, Sap = ctx.Sap, Wh = ctx.Wh, nf0 = ctx.nf0;
     function big(v) { return ctx.fmtBig(v, 'IDR'); }
-    // batang bertumpuk: [{label, n, color}] — celah 2px antar segmen, legenda berlabel + angka
-    function stack(parts, unit) {
-      var tot = parts.reduce(function (a, p) { return a + p.n; }, 0);
-      if (!tot) return '<div class="muted small">Belum ada data</div>';
-      return '<div class="st-bar">' + parts.filter(function (p) { return p.n; }).map(function (p) {
-        return '<i style="flex:' + p.n + ';background:' + p.color + '" title="' + esc(p.label + ': ' + nf0.format(p.n) + ' ' + (unit || '') + ' (' + Math.round(p.n / tot * 100) + '%)') + '"></i>';
-      }).join('') + '</div><div class="st-leg">' + parts.map(function (p) {
-        return '<span' + (p.href ? ' data-go="' + p.href + '"' : '') + '><i style="background:' + p.color + '"></i>' + esc(p.label) + ' <b>' + nf0.format(p.n) + '</b></span>';
-      }).join('') + '</div>';
-    }
-    function hbars(rows) {
-      var max = Math.max.apply(null, rows.map(function (r) { return r.v; }).concat([1]));
-      return '<div class="hb">' + rows.map(function (r) {
-        return '<div class="hb-row" title="' + esc(r.title || '') + '"><span class="hb-l">' + r.label + '</span><div class="hb-t"><i style="width:' + Math.max(1.5, r.v / max * 100).toFixed(1) + '%"></i></div><span class="hb-v">' + esc(r.text) + '</span></div>';
-      }).join('') + '</div>';
-    }
+    var stack = root.Viz.stack, hbars = root.Viz.hbars;
     function attn(cls, icon, n, label, sub, href, go) {
       return '<a class="at at-' + cls + '" href="' + href + '"' + (go ? ' data-post-go="' + go + '"' : '') + '><span class="at-ic">' + svg(icon) + '</span><div><div class="at-n">' + n + '</div><div class="at-l">' + label + '</div><div class="at-s">' + sub + '</div></div><span class="at-go">→</span></a>';
     }

@@ -218,3 +218,15 @@ tr.row-off td { opacity: .5; text-decoration: line-through; }
 .mk-log-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 .wh-foot > div { min-width: 0; flex: 1; }
 .topbar > div:first-child { min-width: 0; }
+
+/* pemilih Field, baris mini, info terakhir diubah */
+.fld-pick { display: inline-flex; align-items: center; gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+.fld-pick span { padding: 0 12px; font-size: 11.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border-right: 1px solid var(--line); align-self: stretch; display: grid; place-items: center; background: var(--surface-2); }
+.fld-pick .select { border: 0; box-shadow: none; font-weight: 700; padding: 9px 12px; min-width: 210px; border-radius: 0; }
+.hb-row.click { cursor: pointer; border-radius: 6px; padding: 3px 4px; margin: -3px -4px; }
+.hb-row.click:hover { background: var(--surface-2); }
+.mini-row { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 8px 6px; border-bottom: 1px solid var(--line-2); cursor: pointer; border-radius: 6px; }
+.mini-row:last-child { border-bottom: 0; } .mini-row:hover { background: var(--surface-2); }
+.ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.last-edit { margin-top: 22px; padding-top: 12px; border-top: 1px solid var(--line); }
+.nav > a:first-child { margin-bottom: 2px; }
