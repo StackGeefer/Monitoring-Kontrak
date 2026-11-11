@@ -474,12 +474,19 @@
       }).join('');
       // status / tahapan (Status/Note)
       var stage = {}; all.forEach(function (r) { if (r.stt === 'On Progress' || r.stt === 'On Planning') { var k = r.note || '—'; stage[k] = (stage[k] || 0) + 1; } });
-      var rows = list.map(function (r) {
-        return '<tr><td class="small muted">' + esc(r.no || '') + '</td><td class="nowrap small">' + (r.tgl ? ctx.fmtDate(r.tgl) : '—') + (r.prq ? '<div class="mono small muted">PRq ' + esc(r.prq) + '</div>' : '') + '</td>' +
-          '<td class="mono small">' + esc(r.pr || '—') + '</td><td><div class="mat-desc">' + esc(r.desc) + '</div><div class="small muted">' + esc(r.wk || '') + ' ' + r.clients.map(clientBadge).join(' ') + '</div></td>' +
-          '<td class="num nowrap">' + (r.nilai != null ? '<b>' + esc(money(r.nilai, r.cur)) + '</b>' : '<span class="muted">—</span>') + '</td><td class="small">' + esc(r.pic || '—') + '</td>' +
+      var D = function (v) { return v ? esc(v) : '<span class="muted">—</span>'; };
+      var edC = function (r, kind) { return '<td class="small muted nowrap">' + (r.ed ? esc(r.ed.by) + '<div>' + ctx.fmtDate((r.ed.at || '').slice(0, 10)) + '</div>' : '—') + '</td>' +
+        (ctx.canWrite() ? '<td class="c pick-col"><button class="btn sm" data-act="pr-edit" data-kind="' + kind + '" data-i="' + r._i + '">' + ICON.edit + ' Update</button></td>' : ''); };
+      var rows = list.map(function (r, n) {
+        return '<tr><td class="small muted">' + (n + 1) + '</td><td class="nowrap small">' + (r.tgl ? ctx.fmtDate(r.tgl) : '<span class="muted">—</span>') + '</td>' +
+          '<td class="mono small">' + D(r.prq) + '</td><td class="mono small">' + (r.pr ? esc(r.pr).replace(/\s*&amp;\s*/g, '<br>') : '<span class="muted">—</span>') + '</td>' +
+          '<td style="min-width:190px"><div class="mat-desc">' + esc(r.desc) + '</div></td>' +
+          '<td><span class="badge ' + (PR_ST[r.stt] || (r.stt === 'Batal' ? '' : 'out')) + '">' + esc(r.stt) + '</span></td>' +
+          '<td class="small" style="min-width:140px">' + D(/cancel/i.test(r.note || '') && r.stt === 'Batal' ? '' : r.note) + '</td>' +
+          '<td class="small nowrap">' + D(r.wk) + ' ' + r.clients.map(clientBadge).join(' ') + '</td>' +
+          '<td class="num nowrap" title="' + (r.nilai != null ? esc(ctx.fmtMoney(r.nilai, r.cur)) : '') + '">' + (r.nilai != null ? '<b>' + esc(money(r.nilai, r.cur)) + '</b>' : '<span class="muted">—</span>') + '</td><td class="small">' + D(r.pic) + '</td>' +
           '<td class="num">' + (r.lt != null ? '<span class="badge ' + (r.lt > 90 ? 'bad' : r.lt > 60 ? 'warn' : '') + '">' + r.lt + ' HK</span>' : '<span class="muted">—</span>') + '</td>' +
-          '<td><span class="badge ' + (PR_ST[r.stt] || (r.stt === 'Batal' ? '' : 'out')) + '">' + esc(r.stt) + '</span>' + (r.note ? '<div class="small" style="margin-top:4px">' + esc(r.note) + '</div>' : '') + edInfo(r, 'pr') + '</td></tr>';
+          '<td class="small">' + D(r.vendor) + '</td>' + edC(r, 'pr') + '</tr>';
       }).join('');
       $('#prBox').innerHTML = '<div class="kpis" style="margin:14px 0">' +
         kpi('Rencana pengadaan', String(all.filter(function (r) { return r.stt !== 'Batal'; }).length), esc(sumCur(all.filter(function (r) { return r.stt !== 'Batal'; })))) +
@@ -492,7 +499,7 @@
         '<div class="card card-pad"><h3 class="section-title">Lead time (hari kerja)</h3>' + buckets + '</div></div>' +
         '<div class="card card-pad" style="margin-bottom:14px;display:flex;flex-direction:column;gap:12px"><div class="toolbar">' + searchBox('prq', F.q, 'Cari deskripsi, no. PR, WK/Field, PIC buyer…') + '</div>' +
         '<div class="chips"><span class="chip-toggle' + (!F.st ? ' on' : '') + '" data-prst="">Semua<span class="chip-n">' + all.length + '</span></span>' + sts.map(function (s) { return '<span class="chip-toggle' + (F.st === s ? ' on' : '') + '" data-prst="' + esc(s) + '">' + esc(s) + '<span class="chip-n">' + cnt[s] + '</span></span>'; }).join('') + '</div></div>' +
-        (list.length ? '<div class="table-wrap tall"><table class="grid"><thead><tr><th>No.</th><th>Tgl project req</th><th>No. PR</th><th>Deskripsi / WK</th><th class="num">Nilai</th><th>PIC buyer</th><th class="num">Lead time</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+        (list.length ? '<div class="table-wrap tall"><table class="grid"><thead><tr><th>No.</th><th>Tgl project req</th><th>Project Req. No.</th><th>No. PR</th><th>Deskripsi</th><th>Status</th><th>Tahapan / catatan</th><th>WK / Field</th><th class="num">Nilai</th><th>PIC buyer</th><th class="num">Lead time</th><th>Vendor</th><th>Diubah</th>' + (ctx.canWrite() ? '<th class="pick-col"></th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
           : '<div class="card empty"><h3>Tidak ada data yang cocok</h3></div>');
     }
     function renderExpediting() {
@@ -506,16 +513,22 @@
       var wk = {};
       all.forEach(function (r) { var k = r.wk || '—', w = wk[k] = wk[k] || { d: 0, l: 0, a: 0, r: 0, n: 0 }; w.n++; if (r.late) w.l++; else if (/Routing/.test(r.stt)) w.a++; else if (/SAP/.test(r.stt)) w.r++; else w.d++; });
       var wkRows = Object.keys(wk).sort().map(function (k) { var w = wk[k]; return '<tr><td><b>' + esc(k) + '</b></td><td class="num">' + w.d + '</td><td class="num">' + (w.l ? '<span class="badge bad">' + w.l + '</span>' : 0) + '</td><td class="num">' + w.a + '</td><td class="num">' + (w.r ? '<span class="badge ok">' + w.r + '</span>' : 0) + '</td><td class="num"><b>' + w.n + '</b></td></tr>'; }).join('');
-      var rows = list.map(function (r) {
-        var s = r.sap, sapTxt = '';
-        if (s && /SAP/.test(r.stt)) sapTxt = '<div class="small muted" style="margin-top:4px">GR penuh di ME2N</div>';
-        else if (s) sapTxt = '<div class="small" style="margin-top:4px">' + (s.out <= 0.5 ? '<span class="badge ok">SAP: diterima penuh</span>' : '<span class="small muted">SAP: ' + ctx.pct(s.recv) + ' diterima · sisa ' + esc(money(s.out, s.p.cur)) + '</span>') + '</div>';
-        else if (r.po) sapTxt = '<div class="small muted" style="margin-top:4px">tidak ada di data ME2N</div>';
-        return '<tr' + (s ? ' class="clickable" data-po="' + esc(s.c + '/' + s.no) + '"' : '') + '><td><div class="mono" style="font-weight:700;color:var(--brand)">' + esc(r.po || '—') + '</div><div class="mono small muted">PR ' + esc(r.pr || '—') + '</div></td>' +
-          '<td><div class="mat-desc">' + esc(r.desc) + '</div><div class="small muted">' + esc(r.vendor || '') + '</div></td><td class="small">' + esc(r.wk) + ' ' + r.clients.map(clientBadge).join(' ') + '</td>' +
-          '<td class="num nowrap"><b>' + (r.nilai != null ? esc(money(r.nilai, r.cur)) : '—') + '</b></td>' +
-          '<td class="nowrap small"><b>' + (r.deliv ? ctx.fmtDate(r.deliv) : '—') + '</b>' + (r.days != null && !(s && s.out <= 0.5) ? '<div>' + (r.days < 0 ? '<span class="badge bad">lewat ' + (-r.days) + ' hr</span>' : '<span class="small muted">' + r.days + ' hari lagi</span>') + '</div>' : '') + '</td>' +
-          '<td><span class="badge ' + (r.late ? 'bad' : /Routing/.test(r.stt) ? 'warn' : /SAP|Selesai/.test(r.stt) ? 'ok' : 'ro') + '">' + esc(r.stt) + '</span>' + (r.note ? '<div class="small" style="margin-top:4px">' + esc(r.note) + '</div>' : '') + sapTxt + (s && s.out > 0.5 ? mimLine(poNote(s.c, s.no)) : '') + edInfo(r, 'ex') + '</td></tr>';
+      var D = function (v) { return v ? esc(v) : '<span class="muted">—</span>'; };
+      var edC = function (r, kind) { return '<td class="small muted nowrap">' + (r.ed ? esc(r.ed.by) + '<div>' + ctx.fmtDate((r.ed.at || '').slice(0, 10)) + '</div>' : '—') + '</td>' +
+        (ctx.canWrite() ? '<td class="c pick-col"><button class="btn sm" data-act="pr-edit" data-kind="' + kind + '" data-i="' + r._i + '">' + ICON.edit + ' Update</button></td>' : ''); };
+      var rows = list.map(function (r, n) {
+        var s = r.sap, sapTxt;
+        if (s) sapTxt = s.out <= 0.5 ? '<span class="badge ok">Diterima penuh</span>' : ctx.pct(s.recv) + ' diterima<div class="muted">sisa ' + esc(money(s.out, s.p.cur)) + '</div>';
+        else sapTxt = r.po ? '<span class="muted">tidak ada di ME2N</span>' : '<span class="muted">—</span>';
+        var mim = s && s.out > 0.5 ? poNote(s.c, s.no) : null;
+        return '<tr' + (s ? ' class="clickable" data-po="' + esc(s.c + '/' + s.no) + '"' : '') + '><td class="small muted">' + (n + 1) + '</td><td class="mono small">' + D(r.pr) + '</td>' +
+          '<td class="mono" style="font-weight:700;color:var(--brand)">' + D(r.po) + '</td>' +
+          '<td style="min-width:170px"><div class="mat-desc">' + esc(r.desc) + '</div></td>' +
+          '<td><span class="badge ' + (r.late ? 'bad' : /Routing/.test(r.stt) ? 'warn' : /SAP|Selesai/.test(r.stt) ? 'ok' : 'ro') + '">' + esc(r.stt) + '</span></td><td class="small nowrap">' + D(r.wk) + ' ' + r.clients.map(clientBadge).join(' ') + '</td><td class="small">' + D(r.vendor) + '</td>' +
+          '<td class="num nowrap" title="' + (r.nilai != null ? esc(ctx.fmtMoney(r.nilai, r.cur)) : '') + '"><b>' + (r.nilai != null ? esc(money(r.nilai, r.cur)) : '—') + '</b></td>' +
+          '<td class="nowrap small"><b>' + (r.deliv ? ctx.fmtDate(r.deliv) : '—') + '</b>' + (r.days != null && !/SAP|Selesai/.test(r.stt) ? '<div>' + (r.days < 0 ? '<span class="badge bad">lewat ' + (-r.days) + ' hr</span>' : '<span class="small muted">' + r.days + ' hari lagi</span>') + '</div>' : '') + '</td>' +
+          '<td class="small" style="min-width:130px">' + D(r.note) + (mim ? '<div style="margin-top:3px"><span class="badge ro">MIM: ' + esc(mim.st || 'catatan') + '</span>' + (mim.eta ? ' ETA ' + ctx.fmtDate(mim.eta) : '') + '</div>' : '') + '</td>' +
+          '<td class="small nowrap">' + sapTxt + '</td>' + edC(r, 'ex') + '</tr>';
       }).join('');
       $('#prBox').innerHTML = '<div class="kpis" style="margin:14px 0">' +
         kpi('Total PO / RO', String(all.length), esc(sumCur(all)), '', ' data-prst=""') +
@@ -527,7 +540,7 @@
         '<div class="chips"><span class="chip-toggle' + (!F.st ? ' on' : '') + '" data-prst="">Semua<span class="chip-n">' + all.length + '</span></span>' + Object.keys(cnt).sort().map(function (s) { return '<span class="chip-toggle' + (F.st === s ? ' on' : '') + '" data-prst="' + esc(s) + '">' + esc(s) + '<span class="chip-n">' + cnt[s] + '</span></span>'; }).join('') + '</div>' +
         '</div>' +
         '<div class="card card-pad"><h3 class="section-title">Status PO/RO per WK/Field</h3><div class="table-wrap" style="box-shadow:none"><table class="grid"><thead><tr><th>WK/Field</th><th class="num" title="PO/RO on delivery">Kirim</th><th class="num">Late</th><th class="num" title="Routing approval">Appr.</th><th class="num" title="Sudah diterima penuh di SAP">GR</th><th class="num">Total</th></tr></thead><tbody>' + wkRows + '</tbody></table></div></div></div>' +
-        (list.length ? '<div class="table-wrap tall"><table class="grid"><thead><tr><th>No. PO/RO · PR</th><th>Deskripsi / vendor</th><th>WK/Field</th><th class="num">Nilai</th><th>Deliv date</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+        (list.length ? '<div class="table-wrap tall"><table class="grid"><thead><tr><th>No.</th><th>No. PR</th><th>No. PO / RO</th><th>Deskripsi</th><th>Status</th><th>WK / Field</th><th>Vendor</th><th class="num">Nilai</th><th>Deliv date</th><th>Catatan</th><th>SAP (ME2N)</th><th>Diubah</th>' + (ctx.canWrite() ? '<th class="pick-col"></th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
           : '<div class="card empty"><h3>Tidak ada data yang cocok</h3></div>');
     }
 
