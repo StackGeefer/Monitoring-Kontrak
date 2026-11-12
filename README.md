@@ -36,6 +36,13 @@ Menu **Upload Data** → pilih beberapa file sekaligus. Jenis file & client dide
 - Filter **Semua client / 100 / 180** di setiap halaman. Total campuran IDR + USD memakai kurs di **Pengaturan → Monitoring SAP** (default 16.000).
 - Upload ulang file sejenis = data jenis itu diganti yang terbaru. Data tersimpan terenkripsi di `data/sap.js`.
 
+## Kontrak OA & Permintaan RO
+
+- **Kontrak OA** menampilkan kontrak **Zona 1 (PG X07)** dan **Regional 1 (PG X02)**; PG lain (X03, X10) lewat pilihan "Other". Kartu per OA: masa berlaku, item pernah dipakai / stok habis di field, sisa nilai, saran RO.
+- **Detail OA → Pilih item yang perlu di-RO**: stok field (Rantau/Lirik/Jambi/Pangkalan Susu), stok Zona 1 lain, pemakaian 12 bulan, **saran qty** = pemakaian/bulan × (cover + lead time) − stok (sama dengan Material Warehouse; cover & lead time di Pengaturan). Centang item → **Ajukan Permintaan RO**.
+- **Progres PR & PO → Permintaan RO**: MIM mengisi No. PR (dan No. RO bila sudah ada). Status otomatis: Menunggu PR → PR dibuat → RO terbit → Diterima. RO terhubung otomatis bila No. PR ditemukan di data ME2N.
+- Stok & pemakaian diambil dari website Material Warehouse (**Data SAP → Perbarui dari Warehouse**, perlu akun Warehouse) dan disimpan terenkripsi di `data/stok.js` hanya untuk material yang ada di kontrak OA.
+
 ## Kontrak Warehouse & GS (per Field)
 
 Menu **Kontrak Warehouse** (Crane & Tronton, Picker/TMC & Trailer, Vacuum Truck, Issuing & Receiving) dan **Kontrak GS** (KRP, sepeda motor, VTS, cleaning service, pembabatan, listrik, AC, dll.). Data awal Field Rantau diimport dari file *TKDN / Anggaran Kontrak SCM*.

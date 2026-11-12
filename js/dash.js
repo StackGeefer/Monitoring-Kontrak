@@ -77,6 +77,8 @@
 
       // ---------- perlu perhatian ----------
       var at = [];
+      var nRo = ctx.Oa ? ctx.Oa.roList().filter(function (r) { return Sap.clientOk(r.c) && r.state === 'Menunggu PR'; }) : [];
+      if (nRo.length) at.push(attn('warn', 'oa', nRo.length, 'Permintaan RO menunggu PR', esc(big(nRo.reduce(function (a, r) { return a + Sap.idr(r.nilai, r.cur); }, 0))) + ' · diproses MIM', '#/progres" data-prtab="ro'));
       if (oaCritNo.length) at.push(attn('bad', 'clock', oaCritNo.length, 'OA kritis tanpa rencana', 'berakhir ≤ ' + st.crit + ' hari, belum ada tindak lanjut', '#/jatuh-tempo'));
       if (lateNo.length) at.push(attn('bad', 'chat', lateNo.length, 'PO/RO terlambat belum di-update', 'belum ada status dari MIM', '#/po', 'noupd'));
       if (late.length) at.push(attn('warn', 'truck', late.length, 'PO/RO lewat delivery date', esc(big(sum(late, function (x) { return x.out; }))) + ' belum diterima', '#/po', 'late'));

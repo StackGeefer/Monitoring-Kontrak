@@ -16,7 +16,8 @@
 
   function SapMod(ctx) {
     var S = ctx.S, esc = ctx.esc, ICON = ctx.ICON, $ = function (s) { return document.querySelector(s); };
-    var V = { client: ctx.Store.load('client', ''), oa: { q: '', st: 'active', pg: '', sort: 'end', n: PAGE }, po: { q: '', st: 'out', type: '', plant: '', sort: 'due', n: PAGE }, pr: { tab: 'pengadaan', q: '', st: '' } };
+    var V = { client: ctx.Store.load('client', ''), oa: { q: '', st: 'active', pg: '', sort: 'end', n: PAGE }, po: { q: '', st: 'out', type: '', plant: '', sort: 'due', n: PAGE }, pr: { tab: 'ro', q: '', st: '' } };
+    var Oa = null;
     var cache = null;
 
     // ---------- util ----------
@@ -445,15 +446,15 @@
     function renderProgres() {
       var view = $('#view'), P = S.sap && S.sap.pr;
       $('#pageActions').innerHTML = (P ? '<button class="btn" data-act="sap-export" data-what="pr">' + ICON.excel + ' Export Excel</button>' : '') +
-        (ctx.canWrite() ? '<button class="btn primary" data-act="pr-add">' + ICON.plus + ' Tambah ' + (V.pr.tab === 'pengadaan' ? 'pengadaan' : 'PO / RO') + '</button>' : '');
-      if (!P) { view.innerHTML = clientChips() + noData('Progres PR & PO'); return; }
+        (ctx.canWrite() && V.pr.tab !== 'ro' ? '<button class="btn primary" data-act="pr-add">' + ICON.plus + ' Tambah ' + (V.pr.tab === 'pengadaan' ? 'pengadaan' : 'PO / RO') + '</button>' : '');
+      if (!P) { S.sap = S.sap || {}; P = S.sap.pr = { pengadaan: [], expediting: [], libur: [] }; }
       var tab = V.pr.tab;
       var src = S.sap.src && S.sap.src.progres;
       view.innerHTML = '<div class="toolbar" style="margin-bottom:12px">' + clientChips() + '<span class="spacer"></span>' + (src ? '<div class="src-line small muted">File: <b>' + esc(src.file || '') + '</b> · update ' + ctx.fmtDate(src.date) + '</div>' : '') + '</div>' +
-        '<div class="mk-tabs"><button class="mk-tab' + (tab === 'pengadaan' ? ' on' : '') + '" data-prtab="pengadaan">Pengadaan (PR) <span class="chip-n">' + prRows().filter(function (r) { return wkOk(r.wk); }).length + '</span></button>' +
+        '<div class="mk-tabs">' + (Oa ? '<button class="mk-tab' + (tab === 'ro' ? ' on' : '') + '" data-prtab="ro">Permintaan RO <span class="chip-n">' + Oa.roList().filter(function (r) { return clientOk(r.c); }).length + '</span></button>' : '') + '<button class="mk-tab' + (tab === 'pengadaan' ? ' on' : '') + '" data-prtab="pengadaan">Pengadaan (PR) <span class="chip-n">' + prRows().filter(function (r) { return wkOk(r.wk); }).length + '</span></button>' +
         '<button class="mk-tab' + (tab === 'expediting' ? ' on' : '') + '" data-prtab="expediting">Expediting (PO / RO) <span class="chip-n">' + exRows().filter(function (r) { return wkOk(r.wk); }).length + '</span></button></div>' +
         '<div id="prBox"></div>';
-      if (tab === 'pengadaan') renderPengadaan(); else renderExpediting();
+      if (tab === 'ro' && Oa) Oa.renderTab($('#prBox')); else if (tab === 'pengadaan') renderPengadaan(); else renderExpediting();
     }
     function sumCur(list) {
       var t = {}; list.forEach(function (r) { if (r.nilai) t[r.cur || 'IDR'] = (t[r.cur || 'IDR'] || 0) + r.nilai; });
@@ -718,6 +719,7 @@
         } else {
           add(prRows().filter(function (r) { return wkOk(r.wk); }).map(function (r) { return { No: r.no, 'Tgl Project Req': r.tgl, 'Project Request No': r.prq, 'No PR': r.pr, 'WK/Field': r.wk, Deskripsi: r.desc, Nilai: r.nilai, CR: r.cur, 'PIC Buyer': r.pic, 'Lead Time (HK)': r.lt, 'Status/Note': r.note, Status: r.stt }; }), 'Pengadaan');
           add(exRows().filter(function (r) { return wkOk(r.wk); }).map(function (r) { return { 'No PR': r.pr, 'No PO/RO': r.po, 'WK/Field': r.wk, Deskripsi: r.desc, Nilai: r.nilai, CR: r.cur, 'Deliv Date': r.deliv, Status: r.stt, Note: r.note, Vendor: r.vendor, 'SAP Diterima %': r.sap && r.sap.recv != null ? Math.round(r.sap.recv) : '', 'SAP Sisa Kirim': r.sap ? r.sap.out : '' }; }), 'Expediting');
+          if (Oa) add(Oa.exportRows(), 'Permintaan RO');
           fname = 'Progres-PR-PO';
         }
         XLSX.writeFile(wb, fname + (V.client ? '-' + V.client : '') + '-' + today() + '.xlsx');
@@ -792,6 +794,7 @@
       load: load, reset: reset, has: has, idx: idx, renderOA: renderOA, renderOADetail: renderOADetail, renderPO: renderPO, renderProgres: renderProgres,
       dashboard: dashboard, dueList: dueList, clientChips: function () { return clientChips(); }, oaTindakSelect: oaTindakSelect, clientBadge: clientBadge, uploadCard: uploadCard, clientName: clientName,
       lateCount: function () { return has() ? idx().pos.filter(function (x) { return x.late; }).length : 0; },
+      setOa: function (o) { Oa = o; }, poRow: poRow, poHead: poHead, openPO: openPO,
       workdays: workdays, V: V, prRows: prRows, exRows: exRows, poNote: poNote, mimLine: mimLine, idr: idr, kurs: kurs, wkOk: wkOk, clientOk: clientOk, plantName: plantName, noteOf: noteOf, PO_ST: PO_ST, daysBadge: daysBadge
     };
   }

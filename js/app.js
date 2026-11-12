@@ -69,7 +69,7 @@
     arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
   };
 
-  var APP_VERSION = '20261111d'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261112a'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Monitoring-Kontrak';
   var HERO = [{ path: 'assets/hero/pertamina-1-kilang.jpg', pos: '74% 40%' }, { path: 'assets/hero/pertamina-2-gudang.jpg', pos: '30% 60%' }];
   var ROLE_LABEL = { owner: 'Owner Utama', writer: 'Owner', viewer: 'Reader' };
@@ -121,7 +121,16 @@
     settings: function () { return settings(); }, canWrite: function () { return canWrite(); }, render: function () { render(); },
     toast: toast, loading: loading, loadXLSX: loadXLSX
   });
-  var Dash = DashMod({
+  var Oa = OaMod({
+    S: S, esc: esc, ICON: ICON, Sap: Sap, Store: Store, Model: Model, GH: GH, Vault: Vault, nf0: nf0,
+    fmtDate: fmtDate, fmtDateTime: fmtDateTime, fmtMoney: fmtMoney, fmtBig: fmtBig, fmtQ: fmtQ, pct: pct, toast: toast, loading: loading,
+    modal: modal, fld: fld, inp: inp, sel: sel, loadScript: loadScript,
+    save: function (m, msg, x) { return save(m, msg, x); }, canWrite: function () { return canWrite(); }, me: function () { return me(); },
+    render: function () { render(); }, closeDrawer: function () { closeDrawer(); }, settings: function () { return settings(); },
+    warehouseUrl: function () { return warehouseUrl(); }, ensureToken: function () { return ensureToken(); }, whKey: function (p) { return whKey(p); }
+  });
+  Sap.setOa(Oa);
+  var Dash = DashMod({ Oa: Oa,
     S: S, esc: esc, ICON: ICON, Model: Model, BLN: BLN, BULAN: BULAN, nf0: nf0, fmtMoney: fmtMoney, fmtBig: fmtBig, fmtDate: fmtDate, pct: pct, Sap: Sap, Wh: Wh,
     bar: function (p, c, t) { return bar(p, c, t); }, absorbCls: function (p) { return absorbCls(p); }, settings: function () { return settings(); },
     canWrite: function () { return canWrite(); }, me: function () { return me(); }
@@ -353,7 +362,7 @@
   async function logout() {
     sessionClear();
     await Store.del('data');
-    await Store.del('sap');
+    await Store.del('sap'); await Store.del('stok'); S.stok = null;
     S.user = null; S.key = null; S.adminKey = null; S.D = null; S.sap = null; S.sapPending = null; S.files = {}; S.imp = null; S.whKey = null; Sap.reset();
     GH.config({ token: null });
     view.innerHTML = '';
@@ -381,6 +390,7 @@
     S.D.list = S.D.list || [];
     S.D.audit = S.D.audit || [];
     await Sap.load();
+    await Oa.load();
   }
   async function ensureToken() {
     if (GH.hasToken()) return true;
@@ -466,7 +476,7 @@
     if (r.name === 'dashboard') renderDashboard();
     else if (r.name === 'kontrak') { if (r.arg) renderDetail(r.arg); else { S.f.kat = 'other'; renderList(); } }
     else if (r.name === 'jatuh-tempo') renderDue();
-    else if (r.name === 'oa') { if (r.arg) Sap.renderOADetail(r.arg); else Sap.renderOA(); }
+    else if (r.name === 'oa') { if (r.arg) Oa.renderDetail(r.arg); else Oa.render(); }
     else if (r.name === 'po') Sap.renderPO();
     else if (r.name === 'progres') Sap.renderProgres();
     else if (r.name === 'wh') Wh.renderPage('Warehouse');
@@ -490,6 +500,8 @@
     n += Sap.has() ? Sap.idx().oas.filter(function (x) { var t = ((S.D.oaNotes || {})[x.c + ':' + x.no] || {}).tindak; return x.st === 'crit' && !t; }).length : 0;
     var b = $('#navDue');
     b.textContent = n; b.classList.toggle('hidden', !n);
+    var nr = Oa.waiting(), b3 = $('#navRo');
+    if (b3) { b3.textContent = nr; b3.classList.toggle('hidden', !nr); }
     var nl = Sap.lateCount(), b2 = $('#navLate');
     b2.textContent = nl; b2.classList.toggle('hidden', !nl);
     $('#sideData').innerHTML = S.user ? '<div class="side-user"><div class="avatar">' + esc(S.user.name.charAt(0).toUpperCase()) + '</div><div style="min-width:0"><b>' + esc(S.user.name) + '</b><div class="small">' + roleLabel(S.user.role) + '</div></div>' +
@@ -1017,7 +1029,7 @@
   // ================= Import =================
   function renderImport() {
     var wh = warehouseUrl(), I = S.imp;
-    view.innerHTML = Sap.uploadCard() + '<div class="card card-pad" id="storageCard" style="margin-bottom:16px"><h4 class="section-title">Penyimpanan GitHub</h4><div class="small muted">Menghitung…</div></div>' +
+    view.innerHTML = Sap.uploadCard() + Oa.stokCard() + '<div class="card card-pad" id="storageCard" style="margin-bottom:16px"><h4 class="section-title">Penyimpanan GitHub</h4><div class="small muted">Menghitung…</div></div>' +
       '<details class="card set-sec"' + (I ? ' open' : '') + '><summary><span class="set-t">Import kontrak dari Excel / Warehouse</span><span class="set-chev"></span></summary><div class="set-body"><div class="ds-grid" style="margin-bottom:16px">' +
       '<div class="card ds-card"><h4>' + ICON.link + ' Ambil dari Material Warehouse</h4><p class="small muted" style="margin:0;line-height:1.6">Tarik daftar OA dari data <b>ME3N</b> yang sudah di-upload di website <a href="' + esc(wh) + '" target="_blank" rel="noopener">Material Warehouse</a> — tanpa upload ulang. ' +
       'Perlu akun Warehouse (otomatis bila Anda sedang login Warehouse di browser ini).</p><div class="toolbar" style="margin-top:auto"><button class="btn primary" data-act="imp-wh">' + ICON.link + ' Ambil data ME3N Warehouse</button></div></div>' +
@@ -1191,6 +1203,17 @@
       return s && s.key ? Vault.fromB64(s.key) : null;
     } catch (e) { return null; }
   }
+  // Kunci data Warehouse: dari sesi Warehouse di browser ini, atau login akun Warehouse (sekali per sesi)
+  async function whKey(payload) {
+    var keys = [S.whKey, whSessionKey()].filter(Boolean);
+    for (var i = 0; i < keys.length; i++) { try { await Vault.decrypt(keys[i], payload); S.whKey = keys[i]; return keys[i]; } catch (e) { /* coba kunci lain */ } }
+    while (true) {
+      var k;
+      try { k = await whLogin(); } catch (e) { toast(/Username atau password/.test(e.message) ? 'Username / password Warehouse salah' : e.message, true); continue; }
+      if (!k) return null;
+      try { await Vault.decrypt(k, payload); S.whKey = k; return k; } catch (e) { toast('Akun Warehouse tidak bisa membuka data ini', true); }
+    }
+  }
   async function whLogin() {
     var wh = warehouseUrl();
     window.MW_USERS = null;
@@ -1321,6 +1344,8 @@
       fld('Kurs USD → IDR', '<input class="input" name="kurs" inputmode="decimal" value="' + esc(nf0.format(+st.kurs || 16000)) + '">') +
       fld('Nama Client 100', '<input class="input" name="c100" value="' + esc(cl['100'] || 'Pertamina EP') + '">') +
       fld('Nama Client 180', '<input class="input" name="c180" value="' + esc(cl['180'] || 'PHE') + '">') +
+      fld('Saran RO: cover stok (bulan)', '<input class="input" type="number" name="cover" min="1" max="24" value="' + esc(st.cover || 3) + '">') +
+      fld('Saran RO: lead time RO (bulan)', '<input class="input" type="number" name="lead" min="0" max="12" step="0.5" value="' + esc(st.lead != null ? st.lead : 1) + '">') +
       '</div><div class="small muted" style="margin-top:6px">Kurs dipakai untuk total gabungan IDR + USD di Dashboard, Kontrak OA &amp; PO/RO.</div>' +
       '<div class="toolbar" style="margin-top:12px"><button class="btn sm primary" type="submit">Simpan</button></div></form>'
       : '<div class="small" style="line-height:1.8">Kurs USD: <b>' + nf0.format(+st.kurs || 16000) + '</b> · Client 100: <b>' + esc(cl['100'] || 'Pertamina EP') + '</b> · Client 180: <b>' + esc(cl['180'] || 'PHE') + '</b></div>');
@@ -1534,7 +1559,7 @@
       e.preventDefault();
       var k = parseNum(f.kurs.value);
       if (!(k > 1000)) { toast('Isi kurs USD yang benar, mis. 16.000', true); return; }
-      save(function (D) { D.settings = Object.assign({}, Model.settingsOf(D), { kurs: k, clients: { '100': f.c100.value.trim() || 'Pertamina EP', '180': f.c180.value.trim() || 'PHE' } }); }, 'Pengaturan Monitoring SAP').then(function (ok) { if (ok) { toast('Pengaturan disimpan'); Sap.reset(); render(); } });
+      save(function (D) { D.settings = Object.assign({}, Model.settingsOf(D), { kurs: k, cover: Math.max(1, +f.cover.value || 3), lead: Math.max(0, f.lead.value === '' ? 1 : +f.lead.value), clients: { '100': f.c100.value.trim() || 'Pertamina EP', '180': f.c180.value.trim() || 'PHE' } }); }, 'Pengaturan Monitoring SAP').then(function (ok) { if (ok) { toast('Pengaturan disimpan'); Sap.reset(); render(); } });
     } else if (f.id === 'setForm') {
       e.preventDefault();
       var lines = function (s) { return s.split('\n').map(function (x) { return x.trim(); }).filter(Boolean); };
@@ -1567,7 +1592,7 @@
     loading('Memuat data kontrak…');
     try {
       await unlockToken();
-      if (!fresh) await loadData(); else await Sap.load();
+      if (!fresh) await loadData(); else { await Sap.load(); await Oa.load(); }
       loading(false);
       render();
     } catch (e) { loading(false); toast('Gagal memuat data: ' + e.message, true); }
