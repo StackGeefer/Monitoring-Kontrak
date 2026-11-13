@@ -14,7 +14,8 @@
     selesai: 'Selesai / ditutup',
     terminasi: 'Terminasi'
   };
-  var DEFAULT_SETTINGS = { warn: 90, crit: 30, absorbWarn: 90, jenis: JENIS, fungsi: FUNGSI, warehouseUrl: '', kurs: 16000, cover: 3, lead: 1, clients: { '100': 'Pertamina EP', '180': 'PHE' } };
+  var FIELD = ['Rantau', 'Pangkalan Susu', 'Lirik', 'Jambi'];
+  var DEFAULT_SETTINGS = { warn: 90, crit: 30, absorbWarn: 90, jenis: JENIS, fungsi: FUNGSI, field: FIELD, warehouseUrl: '', kurs: 16000, cover: 3, lead: 1, clients: { '100': 'Pertamina EP', '180': 'PHE' } };
 
   function todayStr() {
     var d = new Date();
@@ -30,6 +31,7 @@
     var s = Object.assign({}, DEFAULT_SETTINGS, (D && D.settings) || {});
     if (!s.jenis || !s.jenis.length) s.jenis = JENIS;
     if (!s.fungsi || !s.fungsi.length) s.fungsi = FUNGSI;
+    if (!s.field || !s.field.length) s.field = FIELD;
     return s;
   }
 
