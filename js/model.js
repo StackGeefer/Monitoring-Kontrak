@@ -14,7 +14,7 @@
     selesai: 'Selesai / ditutup',
     terminasi: 'Terminasi'
   };
-  var FIELD = ['Rantau', 'Pangkalan Susu', 'Lirik', 'Jambi'];
+  var FIELD = ['NSO', 'Rantau', 'Pangkalan Susu', 'Lirik', 'Jambi', 'Jambi Merang'];
   var DEFAULT_SETTINGS = { warn: 90, crit: 30, absorbWarn: 90, jenis: JENIS, fungsi: FUNGSI, field: FIELD, warehouseUrl: '', kurs: 16000, cover: 3, lead: 1, clients: { '100': 'Pertamina EP', '180': 'PHE' } };
 
   function todayStr() {
