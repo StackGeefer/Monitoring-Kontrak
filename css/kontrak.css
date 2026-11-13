@@ -265,3 +265,28 @@ tr.row-off td { opacity: .5; text-decoration: line-through; }
 .ro-steps.big em { font-style: normal; font-size: 11px; font-weight: 700; color: var(--muted); text-align: center; }
 .ro-steps.big span.done em { color: #0f8a7a; } .ro-steps.big span.cur em { color: #1d6fd6; }
 .sap-mk { display: inline-block; font-size: 9.5px; font-weight: 800; letter-spacing: .04em; padding: 0 4px; border-radius: 4px; background: #eef7d8; color: #4d6b06; vertical-align: 1px; }
+
+/* ================= Click to review: KPI + grafik interaktif ================= */
+.kpi-click { position: relative; }
+.kpi-go { position: absolute; top: 12px; right: 14px; font-size: 11px; font-weight: 700; color: var(--muted); opacity: .55; transition: opacity .15s, color .15s; }
+.kpi-click:hover .kpi-go { opacity: 1; color: var(--brand); }
+.kpi-sel { border-color: var(--brand); box-shadow: inset 0 0 0 1px var(--brand); background: linear-gradient(180deg, #eef5ff, #fff); }
+.kpi-sel .kpi-go { opacity: 1; color: var(--brand); }
+.insight { margin-bottom: 14px; }
+.insight-g { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 14px 32px; }
+.ins-h { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; font-weight: 800; color: var(--muted); margin-bottom: 10px; }
+.ins-h span { text-transform: none; letter-spacing: 0; font-weight: 600; font-size: 11.5px; margin-left: 6px; opacity: .8; }
+.ins-f { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line-2); display: flex; flex-direction: column; gap: 10px; }
+.wkc { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 4px 32px; }
+.wkc-row { display: grid; grid-template-columns: 120px 1fr 92px; gap: 10px; align-items: center; padding: 4px 6px; margin: 0 -6px; border-radius: 7px; cursor: pointer; font-size: 13px; }
+.wkc-row:hover { background: var(--surface-2); }
+.wkc-row.on { background: var(--brand-soft); box-shadow: inset 0 0 0 1px #b9cdea; }
+.wkc-row.dim { opacity: .45; }
+.wkc-l { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wkc-t .st-bar { height: 12px; min-width: 6px; }
+.wkc-n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wkc-n em { font-style: normal; font-size: 11px; color: var(--bad); font-weight: 700; }
+.st-leg span.click { cursor: pointer; padding: 2px 6px; margin: -2px -6px; border-radius: 6px; }
+.st-leg span.click:hover { background: var(--surface-2); }
+.st-leg span.click.on { background: var(--brand-soft); box-shadow: inset 0 0 0 1px #b9cdea; }
+.hb-row.click i { transition: background .15s; }

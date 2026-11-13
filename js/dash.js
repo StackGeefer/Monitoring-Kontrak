@@ -27,7 +27,7 @@
     return '<div class="st-bar">' + parts.filter(function (p) { return p.n; }).map(function (p) {
       return '<i style="flex:' + p.n + ';background:' + p.color + '" title="' + escH(p.label + ': ' + nfV.format(p.n) + ' ' + (unit || '') + ' (' + Math.round(p.n / tot * 100) + '%)') + '"></i>';
     }).join('') + '</div><div class="st-leg">' + parts.map(function (p) {
-      return '<span><i style="background:' + p.color + '"></i>' + escH(p.label) + ' <b>' + nfV.format(p.n) + '</b></span>';
+      return '<span' + (p.attr ? ' class="click' + (p.on ? ' on' : '') + '"' + p.attr : '') + '><i style="background:' + p.color + '"></i>' + escH(p.label) + ' <b>' + nfV.format(p.n) + '</b></span>';
     }).join('') + '</div>';
   }
   // batang mendatar: [{label(html), v, text, title, attr}]

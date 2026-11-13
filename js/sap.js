@@ -114,7 +114,7 @@
         (ctx.canWrite() ? 'Upload file export SAP (ME3N / ME2N) atau file Progres PR/RO di halaman Upload Data.' : 'Owner / Writer belum meng-upload data.') + '</p>' +
         (ctx.canWrite() ? '<a class="btn primary" href="#/import">' + ICON.upload + ' Upload Data</a>' : '') + '</div>';
     }
-    function kpi(label, v, s, cls, attrs) { return '<div class="kpi' + (cls ? ' kpi-' + cls : '') + (attrs ? ' kpi-click' : '') + '"' + (attrs || '') + '><div class="k">' + label + '</div><div class="v">' + v + '</div><div class="s">' + s + '</div></div>'; }
+    function kpi(label, v, s, cls, attrs) { return '<div class="kpi' + (cls ? ' kpi-' + cls : '') + (attrs ? ' kpi-click' : '') + '"' + (attrs || '') + '><div class="k">' + label + '</div><div class="v">' + v + '</div><div class="s">' + s + '</div>' + (attrs ? '<span class="kpi-go">Lihat →</span>' : '') + '</div>'; }
     function sumIdr(list, f, cf) { return list.reduce(function (a, x) { return a + idr(f(x), cf(x)); }, 0); }
     function more(list, n, act) { return list.length > n ? '<div class="center" style="margin-top:12px"><button class="btn" data-act="' + act + '">Tampilkan lebih banyak (' + Math.min(PAGE, list.length - n) + ' dari ' + (list.length - n) + ' sisa)</button></div>' : ''; }
     function searchBox(id, val, ph) {
@@ -302,8 +302,8 @@
         kpi('Belum di-update MIM', ctx.nf0.format(noUpd.length), 'dari yang terlambat', noUpd.length ? 'bad' : 'ok', ' data-post="noupd"') +
         kpi('Belum ditagih', ctx.nf0.format(inv.length), esc(moneyIdr(sv(inv, function (x) { return x.inv; }))), '', ' data-post="inv"') + '</div>' +
         '<div class="dc-grid" style="margin-bottom:14px"><div class="card card-pad dc"><div class="dc-sub" style="margin-top:0">Status pengiriman' + (F.plant ? ' — ' + esc(plantName(F.plant) || F.plant) : '') + '</div>' + Vz.stack([
-          { label: 'Dalam pengiriman', n: n('open'), color: C.blue }, { label: 'Diterima sebagian', n: n('partial'), color: C.teal }, { label: 'Terlambat', n: n('late'), color: C.red },
-          { label: 'Belum ditagih', n: n('inv'), color: C.amber }, { label: 'Selesai', n: n('done'), color: C.gray }], 'dokumen') +
+          { label: 'Dalam pengiriman', n: n('open'), color: C.blue, attr: ' data-post="out"' }, { label: 'Diterima sebagian', n: n('partial'), color: C.teal, attr: ' data-post="out"' }, { label: 'Terlambat', n: n('late'), color: C.red, attr: ' data-post="late"', on: F.st === 'late' },
+          { label: 'Belum ditagih', n: n('inv'), color: C.amber, attr: ' data-post="inv"', on: F.st === 'inv' }, { label: 'Selesai', n: n('done'), color: C.gray, attr: ' data-post="done"', on: F.st === 'done' }], 'dokumen') +
           '<div class="dc-sub">Penerimaan nilai</div>' + bar(sv(all, function (x) { return x.val; }) ? (1 - sv(out, function (x) { return x.out; }) / sv(all, function (x) { return x.val; })) * 100 : null) +
           '<div class="small muted" style="margin-top:4px">' + ctx.pct(sv(all, function (x) { return x.val; }) ? (1 - sv(out, function (x) { return x.out; }) / sv(all, function (x) { return x.val; })) * 100 : null) + ' nilai PO/RO sudah diterima</div></div>' +
         second +
@@ -471,6 +471,13 @@
       }, (r.del ? 'Hapus' : isNew ? 'Tambah' : 'Update') + ' progres ' + (kind === 'pr' ? 'pengadaan' : 'PO/RO') + ': ' + rec.desc);
       if (ok) { ctx.toast(r.del ? 'Baris dihapus' : 'Progres disimpan'); ctx.render(); }
     }
+    // render ulang tab aktif; bila dipicu dari KPI / grafik, gulir ke tabel
+    function prRefresh(src) {
+      var y = window.scrollY;
+      if (V.pr.tab === 'pengadaan') renderPengadaan(); else renderExpediting();
+      window.scrollTo(0, y);
+      if (src && src.closest && src.closest('.kpi-click,.insight-g,.wkc')) { var L = document.getElementById('prList'); if (L) L.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    }
     function bucket(lt) { return lt == null ? 'Tanggal belum diisi' : lt <= 30 ? '0–30 HK' : lt <= 60 ? '31–60 HK' : lt <= 90 ? '61–90 HK' : '> 90 HK'; }
     function renderProgres() {
       var view = $('#view'), P = S.sap && S.sap.pr;
@@ -514,7 +521,7 @@
       var stOrder = ['On Progress', 'On Review', 'Need Confirmation', 'On Planning', 'Belum ada status', 'Pipeline / belum PR', 'Batal'];
       var cnt = {}; all.forEach(function (r) { cnt[r.stt] = (cnt[r.stt] || 0) + 1; });
       var sts = stOrder.filter(function (s) { return cnt[s]; }).concat(Object.keys(cnt).filter(function (s) { return stOrder.indexOf(s) < 0; }));
-      var list = all.filter(function (r) { return (!F.st || r.stt === F.st) && (!q || [r.desc, r.pr, r.prq, r.wk, r.pic, r.note].join(' ').toLowerCase().indexOf(q) >= 0); });
+      var list = all.filter(function (r) { return (!F.st || r.stt === F.st) && (!F.stage || (r.note || '—') === F.stage && /Progress|Planning/.test(r.stt)) && (!F.lt || bucket(r.lt) === F.lt && r.stt !== 'Batal' && r.tgl) && (!q || [r.desc, r.pr, r.prq, r.wk, r.pic, r.note].join(' ').toLowerCase().indexOf(q) >= 0); });
       var prog = all.filter(function (r) { return r.stt === 'On Progress'; }), plan = all.filter(function (r) { return r.stt === 'On Planning'; }), pipe = all.filter(function (r) { return /Pipeline|Belum ada/.test(r.stt); });
       var act = all.filter(function (r) { return r.stt !== 'Batal' && r.tgl; }), bk = {};
       act.forEach(function (r) { var b = bucket(r.lt); bk[b] = (bk[b] || 0) + 1; });
@@ -538,26 +545,30 @@
           '<td class="num">' + (r.lt != null ? '<span class="badge ' + (r.lt > 90 ? 'bad' : r.lt > 60 ? 'warn' : '') + '">' + r.lt + ' HK</span>' : '<span class="muted">—</span>') + '</td>' +
           (ctx.canWrite() ? '<td class="c pick-col"><button class="btn sm" data-act="pr-edit" data-kind="pr" data-i="' + r._i + '">' + ICON.edit + ' Update</button></td>' : '') + '</tr>';
       }).join('');
+      var Vz = root.Viz, C = Vz.C, LT = ['0–30 HK', '31–60 HK', '61–90 HK', '> 90 HK'], LTC = [C.blue, C.teal, C.amber, C.red];
+      var stageRows = Object.keys(stage).sort(function (a, b) { return stage[b] - stage[a]; }).map(function (k) { return { label: esc(k), v: stage[k], text: String(stage[k]), attr: ' data-prstage="' + esc(k) + '"', color: F.stage && F.stage !== k ? C.gray : null }; });
+      var ltRows = LT.map(function (b, i) { return { label: b, v: bk[b] || 0, text: String(bk[b] || 0), attr: ' data-prlt="' + b + '"', color: F.lt && F.lt !== b ? C.gray : LTC[i] }; });
+      var active = [F.st, F.stage, F.lt].filter(Boolean);
       $('#prBox').innerHTML = '<div class="kpis" style="margin:14px 0">' +
-        kpi('Rencana pengadaan', String(all.filter(function (r) { return r.stt !== 'Batal'; }).length), esc(sumCur(all.filter(function (r) { return r.stt !== 'Batal'; })))) +
-        kpi('On Progress', String(prog.length), esc(sumCur(prog)), prog.length ? '' : '', ' data-prst="On Progress"') +
-        kpi('On Planning', String(plan.length), esc(sumCur(plan)), plan.length ? 'warn' : '', ' data-prst="On Planning"') +
-        kpi('Pipeline / belum PR', String(pipe.length), 'RFI, drafting, mapping item', '', ' data-prst="Pipeline / belum PR"') +
-        kpi('Lead time > 90 HK', String(bk['> 90 HK'] || 0), 'sejak project request (hari kerja)', bk['> 90 HK'] ? 'bad' : '') + '</div>' +
-        '<div class="mk-dash" style="margin-bottom:14px"><div class="card card-pad"><h3 class="section-title">Tahapan berjalan</h3><div class="chips">' +
-        Object.keys(stage).sort(function (a, b) { return stage[b] - stage[a]; }).map(function (k) { return '<span class="stage-chip">' + esc(k) + ' <b>' + stage[k] + '</b></span>'; }).join('') + '</div></div>' +
-        '<div class="card card-pad"><h3 class="section-title">Lead time (hari kerja)</h3>' + buckets + '</div></div>' +
-        '<div class="card card-pad" style="margin-bottom:14px;display:flex;flex-direction:column;gap:12px"><div class="toolbar">' + searchBox('prq', F.q, 'Cari deskripsi, no. PR, WK/Field, PIC buyer…') + '</div>' +
-        '<div class="chips"><span class="chip-toggle' + (!F.st ? ' on' : '') + '" data-prst="">Semua<span class="chip-n">' + all.length + '</span></span>' + sts.map(function (s) { return '<span class="chip-toggle' + (F.st === s ? ' on' : '') + '" data-prst="' + esc(s) + '">' + esc(s) + '<span class="chip-n">' + cnt[s] + '</span></span>'; }).join('') + '</div></div>' +
-        (list.length ? '<div class="table-wrap tall"><table class="grid"><thead><tr><th>No.</th><th>Tgl proj. req</th><th>Proj. Req. No.</th><th>No. PR</th><th>Deskripsi</th><th>Status</th><th>Tahapan / catatan</th><th>WK / Field</th><th class="num">Nilai</th><th>PIC buyer</th><th class="num">Lead time</th>' + (ctx.canWrite() ? '<th class="pick-col"></th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
-          : '<div class="card empty"><h3>Tidak ada data yang cocok</h3></div>');
+        kpi('Rencana pengadaan', String(all.filter(function (r) { return r.stt !== 'Batal'; }).length), esc(sumCur(all.filter(function (r) { return r.stt !== 'Batal'; }))), !active.length ? 'sel' : '', ' data-prst="" data-prreset') +
+        kpi('On Progress', String(prog.length), esc(sumCur(prog)), F.st === 'On Progress' ? 'sel' : '', ' data-prst="On Progress"') +
+        kpi('On Planning', String(plan.length), esc(sumCur(plan)), F.st === 'On Planning' ? 'sel' : plan.length ? 'warn' : '', ' data-prst="On Planning"') +
+        kpi('Pipeline / belum PR', String(pipe.length), 'RFI, drafting, mapping item', F.st === 'Pipeline / belum PR' ? 'sel' : '', ' data-prst="Pipeline / belum PR"') +
+        kpi('Lead time > 90 HK', String(bk['> 90 HK'] || 0), 'sejak project request', F.lt === '> 90 HK' ? 'sel' : bk['> 90 HK'] ? 'bad' : '', ' data-prlt="> 90 HK"') + '</div>' +
+        '<div class="card card-pad insight"><div class="insight-g"><div><div class="ins-h">Tahapan berjalan <span>klik untuk filter</span></div>' + (stageRows.length ? Vz.hbars(stageRows) : '<div class="muted small">—</div>') + '</div>' +
+        '<div><div class="ins-h">Lead time (hari kerja) <span>klik untuk filter</span></div>' + Vz.hbars(ltRows) + '</div></div>' +
+        '<div class="ins-f"><div class="toolbar">' + searchBox('prq', F.q, 'Cari deskripsi, no. PR, WK/Field, PIC buyer…') + (active.length ? '<button class="btn sm" data-prreset>Reset filter</button>' : '') + '</div>' +
+        '<div class="chips"><span class="chip-toggle' + (!F.st ? ' on' : '') + '" data-prst="">Semua<span class="chip-n">' + all.length + '</span></span>' + sts.map(function (s) { return '<span class="chip-toggle' + (F.st === s ? ' on' : '') + '" data-prst="' + esc(s) + '">' + esc(s) + '<span class="chip-n">' + cnt[s] + '</span></span>'; }).join('') +
+        (F.stage ? '<span class="chip-toggle on" data-prstage="' + esc(F.stage) + '">Tahapan: ' + esc(F.stage) + ' ✕</span>' : '') + (F.lt ? '<span class="chip-toggle on" data-prlt="' + esc(F.lt) + '">Lead time ' + esc(F.lt) + ' ✕</span>' : '') + '</div></div></div>' +
+        '<div id="prList">' + (list.length ? '<div class="result-meta" style="margin-bottom:8px"><b>' + list.length + '</b> dari ' + all.length + ' rencana pengadaan</div><div class="table-wrap tall"><table class="grid"><thead><tr><th>No.</th><th>Tgl proj. req</th><th>Proj. Req. No.</th><th>No. PR</th><th>Deskripsi</th><th>Status</th><th>Tahapan / catatan</th><th>WK / Field</th><th class="num">Nilai</th><th>PIC buyer</th><th class="num">Lead time</th>' + (ctx.canWrite() ? '<th class="pick-col"></th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+          : '<div class="card empty"><h3>Tidak ada data yang cocok</h3></div>') + '</div>';
     }
     function renderExpediting() {
       var all = exRows().filter(function (r) { return wkOk(r.wk); }), F = V.pr, q = F.q.trim().toLowerCase();
       var cnt = {}; all.forEach(function (r) { cnt[r.stt] = (cnt[r.stt] || 0) + 1; });
-      var list = all.filter(function (r) { return (!F.st || r.stt === F.st) && (!q || [r.desc, r.pr, r.po, r.wk, r.vendor, r.note].join(' ').toLowerCase().indexOf(q) >= 0); });
+      var list = all.filter(function (r) { return (!F.st || (F.st === '__late' ? r.late : F.st === '__del' ? /on delivery|Lewat delivery/i.test(r.stt) && !r.late : r.stt === F.st)) && (!F.wk || (r.wk || '—') === F.wk) && (!q || [r.desc, r.pr, r.po, r.wk, r.vendor, r.note].join(' ').toLowerCase().indexOf(q) >= 0); });
       list.sort(function (a, b) { return (b.late - a.late) || ((a.deliv || '9999') < (b.deliv || '9999') ? -1 : 1); });
-      var onDel = all.filter(function (r) { return /on delivery|Lewat delivery/i.test(r.stt); }), late = all.filter(function (r) { return r.late; }), rout = all.filter(function (r) { return /Routing/.test(r.stt); });
+      var onDel = all.filter(function (r) { return /on delivery|Lewat delivery/i.test(r.stt) && !r.late; }), late = all.filter(function (r) { return r.late; }), rout = all.filter(function (r) { return /Routing/.test(r.stt); });
       var sapDone = all.filter(function (r) { return r.stt === 'Sudah diterima (SAP)'; });
       // per WK/Field
       var wk = {};
@@ -580,18 +591,26 @@
           '<td class="small" style="min-width:130px">' + D(r.note) + (mim ? '<div style="margin-top:3px"><span class="badge ro">MIM: ' + esc(mim.st || 'catatan') + '</span>' + (mim.eta ? ' ETA ' + ctx.fmtDate(mim.eta) : '') + '</div>' : '') + '</td>' +
           '<td class="small nowrap">' + sapTxt + '</td>' + edC(r, 'ex') + '</tr>';
       }).join('');
+      var Vz = root.Viz, C = Vz.C, wmax = Math.max.apply(null, [1].concat(Object.keys(wk).map(function (k) { return wk[k].n; })));
+      var segs = [['d', 'On delivery', C.blue, '__del'], ['l', 'Terlambat', C.red, '__late'], ['a', 'Routing approval', C.amber, 'Routing Approval'], ['r', 'Diterima (SAP)', C.teal, 'Sudah diterima (SAP)']];
+      var wkChart = '<div class="wkc">' + Object.keys(wk).sort(function (a, b) { return wk[b].n - wk[a].n || a.localeCompare(b); }).map(function (k) {
+        var w = wk[k], dim = F.wk && F.wk !== k;
+        return '<div class="wkc-row' + (F.wk === k ? ' on' : '') + (dim ? ' dim' : '') + '" data-exwk="' + esc(k) + '" title="' + esc(k + ': ' + segs.map(function (g) { return g[1] + ' ' + w[g[0]]; }).join(' · ')) + '"><span class="wkc-l">' + esc(k) + '</span>' +
+          '<div class="wkc-t"><div class="st-bar" style="width:' + (w.n / wmax * 100).toFixed(1) + '%">' + segs.filter(function (g) { return w[g[0]]; }).map(function (g) { return '<i style="flex:' + w[g[0]] + ';background:' + g[2] + '"></i>'; }).join('') + '</div></div>' +
+          '<b class="wkc-n">' + w.n + (w.l ? ' <em>' + w.l + ' telat</em>' : '') + '</b></div>';
+      }).join('') + '</div><div class="st-leg">' + segs.map(function (g) { var n = all.filter(function (r) { return g[3] === '__late' ? r.late : g[3] === '__del' ? /on delivery|Lewat delivery/i.test(r.stt) && !r.late : r.stt === g[3]; }).length; return '<span class="click' + (F.st === g[3] ? ' on' : '') + '" data-prst="' + (F.st === g[3] ? '' : esc(g[3])) + '"><i style="background:' + g[2] + '"></i>' + g[1] + ' <b>' + n + '</b></span>'; }).join('') + '</div>';
+      var active = [F.st, F.wk].filter(Boolean);
       $('#prBox').innerHTML = '<div class="kpis" style="margin:14px 0">' +
-        kpi('Total PO / RO', String(all.length), esc(sumCur(all)), '', ' data-prst=""') +
-        kpi('On delivery', String(onDel.length), esc(sumCur(onDel)), '', ' data-prst="PO/RO on delivery"') +
-        kpi('Terlambat', String(late.length), esc(sumCur(late)) + ' · late + lewat delivery date', late.length ? 'bad' : '') +
-        kpi('Routing approval', String(rout.length), esc(sumCur(rout)), rout.length ? 'warn' : '', ' data-prst="Routing Approval"') +
-        kpi('Sudah diterima (SAP)', String(sapDone.length), 'GR penuh di ME2N — perbarui status di file progres', sapDone.length ? 'ok' : '', ' data-prst="Sudah diterima (SAP)"') + '</div>' +
-        '<div class="mk-dash" style="margin-bottom:14px"><div class="card card-pad" style="display:flex;flex-direction:column;gap:12px"><div class="toolbar">' + searchBox('prq', F.q, 'Cari deskripsi, no. PO/RO, PR, vendor…') + '</div>' +
-        '<div class="chips"><span class="chip-toggle' + (!F.st ? ' on' : '') + '" data-prst="">Semua<span class="chip-n">' + all.length + '</span></span>' + Object.keys(cnt).sort().map(function (s) { return '<span class="chip-toggle' + (F.st === s ? ' on' : '') + '" data-prst="' + esc(s) + '">' + esc(s) + '<span class="chip-n">' + cnt[s] + '</span></span>'; }).join('') + '</div>' +
-        '</div>' +
-        '<div class="card card-pad"><h3 class="section-title">Status PO/RO per WK/Field</h3><div class="table-wrap" style="box-shadow:none"><table class="grid"><thead><tr><th>WK/Field</th><th class="num" title="PO/RO on delivery">Kirim</th><th class="num">Late</th><th class="num" title="Routing approval">Appr.</th><th class="num" title="Sudah diterima penuh di SAP">GR</th><th class="num">Total</th></tr></thead><tbody>' + wkRows + '</tbody></table></div></div></div>' +
-        (list.length ? '<div class="table-wrap tall"><table class="grid"><thead><tr><th>No.</th><th>No. PR</th><th>No. PO / RO</th><th>Deskripsi</th><th>Status</th><th>WK / Field</th><th>Vendor</th><th class="num">Nilai</th><th>Deliv date</th><th>Catatan</th><th>SAP (ME2N)</th><th>Diubah</th>' + (ctx.canWrite() ? '<th class="pick-col"></th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
-          : '<div class="card empty"><h3>Tidak ada data yang cocok</h3></div>');
+        kpi('Total PO / RO', String(all.length), esc(sumCur(all)), !active.length ? 'sel' : '', ' data-prst="" data-prreset') +
+        kpi('On delivery', String(onDel.length), esc(sumCur(onDel)), F.st === '__del' ? 'sel' : '', ' data-prst="__del"') +
+        kpi('Terlambat', String(late.length), esc(sumCur(late)), F.st === '__late' ? 'sel' : late.length ? 'bad' : '', ' data-prst="__late"') +
+        kpi('Routing approval', String(rout.length), esc(sumCur(rout)), F.st === 'Routing Approval' ? 'sel' : rout.length ? 'warn' : '', ' data-prst="Routing Approval"') +
+        kpi('Sudah diterima (SAP)', String(sapDone.length), 'GR penuh di ME2N', F.st === 'Sudah diterima (SAP)' ? 'sel' : sapDone.length ? 'ok' : '', ' data-prst="Sudah diterima (SAP)"') + '</div>' +
+        '<div class="card card-pad insight"><div class="ins-h">Status PO / RO per WK / Field <span>klik baris atau warna untuk filter</span></div>' + wkChart +
+        '<div class="ins-f"><div class="toolbar">' + searchBox('prq', F.q, 'Cari deskripsi, no. PO/RO, PR, vendor…') + (active.length ? '<button class="btn sm" data-prreset>Reset filter</button>' : '') + '</div>' +
+        (active.length ? '<div class="chips">' + (F.wk ? '<span class="chip-toggle on" data-exwk="' + esc(F.wk) + '">' + esc(F.wk) + ' ✕</span>' : '') + (F.st ? '<span class="chip-toggle on" data-prst="">' + esc({ __late: 'Terlambat', __del: 'On delivery' }[F.st] || F.st) + ' ✕</span>' : '') + '</div>' : '') + '</div></div>' +
+        '<div id="prList">' + (list.length ? '<div class="result-meta" style="margin-bottom:8px"><b>' + list.length + '</b> dari ' + all.length + ' PO / RO · nilai <b>' + esc(sumCur(list)) + '</b></div><div class="table-wrap tall"><table class="grid"><thead><tr><th>No.</th><th>No. PR</th><th>No. PO / RO</th><th>Deskripsi</th><th>Status</th><th>WK / Field</th><th>Vendor</th><th class="num">Nilai</th><th>Deliv date</th><th>Catatan</th><th>SAP (ME2N)</th><th>Diubah</th>' + (ctx.canWrite() ? '<th class="pick-col"></th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+          : '<div class="card empty"><h3>Tidak ada data yang cocok</h3></div>') + '</div>';
     }
 
     // ================= Dashboard (ringkasan SAP) =================
@@ -784,11 +803,15 @@
       var t = e.target, b;
       if ((b = t.closest('[data-client]'))) { V.client = b.getAttribute('data-client'); ctx.Store.save('client', V.client); V.oa.n = PAGE; V.po.n = PAGE; ctx.render(); return; }
       if ((b = t.closest('[data-oast]'))) { V.oa.st = b.getAttribute('data-oast'); V.oa.n = PAGE; renderOA(); return; }
-      if ((b = t.closest('[data-post]'))) { V.po.st = b.getAttribute('data-post'); V.po.n = PAGE; renderPO(); return; }
+      if ((b = t.closest('[data-post]'))) { V.po.st = b.getAttribute('data-post'); V.po.n = PAGE; var y = window.scrollY; renderPO(); window.scrollTo(0, y); if (b.closest('.kpi-click,.st-leg,.mini-row')) { var L = document.getElementById('poList'); if (L) L.scrollIntoView({ behavior: 'smooth', block: 'start' }); } return; }
       if ((b = t.closest('[data-post-go]'))) { V.po.st = b.getAttribute('data-post-go'); return; }
       if ((b = t.closest('[data-plant]'))) { var pl = b.getAttribute('data-plant'); V.po.plant = V.po.plant === pl ? '' : pl; V.po.n = PAGE; renderPO(); return; }
-      if ((b = t.closest('[data-prtab]'))) { V.pr.tab = b.getAttribute('data-prtab'); V.pr.st = ''; V.pr.q = ''; ctx.render(); return; }
-      if ((b = t.closest('[data-prst]'))) { V.pr.st = b.getAttribute('data-prst'); if (V.pr.tab === 'pengadaan') renderPengadaan(); else renderExpediting(); return; }
+      if ((b = t.closest('[data-prtab]'))) { V.pr.tab = b.getAttribute('data-prtab'); V.pr.st = ''; V.pr.q = ''; V.pr.wk = ''; V.pr.stage = ''; V.pr.lt = ''; ctx.render(); return; }
+      if ((b = t.closest('[data-prreset]'))) { V.pr.st = ''; V.pr.wk = ''; V.pr.stage = ''; V.pr.lt = ''; V.pr.q = ''; prRefresh(b); return; }
+      if ((b = t.closest('[data-prst]'))) { var nv = b.getAttribute('data-prst'); V.pr.st = b.classList.contains('kpi-click') && V.pr.st === nv ? '' : nv; prRefresh(b); return; }
+      if ((b = t.closest('[data-exwk]'))) { var w2 = b.getAttribute('data-exwk'); V.pr.wk = V.pr.wk === w2 ? '' : w2; prRefresh(b); return; }
+      if ((b = t.closest('[data-prstage]'))) { var s2 = b.getAttribute('data-prstage'); V.pr.stage = V.pr.stage === s2 ? '' : s2; prRefresh(b); return; }
+      if ((b = t.closest('[data-prlt]'))) { var l2 = b.getAttribute('data-prlt'); V.pr.lt = V.pr.lt === l2 ? '' : l2; prRefresh(b); return; }
       if (t.closest('a,button,select,input,textarea')) {
         b = t.closest('[data-act]');
         if (!b) return;
