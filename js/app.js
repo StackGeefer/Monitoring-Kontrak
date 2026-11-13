@@ -69,7 +69,7 @@
     arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
   };
 
-  var APP_VERSION = '20261113a'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261113d'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Monitoring-Kontrak';
   var HERO = [{ path: 'assets/hero/pertamina-1-kilang.jpg', pos: '74% 40%' }, { path: 'assets/hero/pertamina-2-gudang.jpg', pos: '30% 60%' }];
   var ROLE_LABEL = { owner: 'Owner Utama', writer: 'Owner', mim: 'MIM', viewer: 'Reader' };
@@ -718,7 +718,9 @@
     var k = id ? findK(id) : null;
     if (id && !k) { view.innerHTML = '<div class="card empty"><h3>Kontrak tidak ditemukan</h3></div>'; return; }
     k = k || { cur: 'IDR', jenis: settings().jenis[0], kat: preKat === 'Warehouse' || preKat === 'GS' ? preKat : '', field: Store.load('whField', '') || 'Rantau' };
-    var flds = {}; S.D.list.forEach(function (x) { if (x.field) flds[x.field] = 1; });
+    // Daftar Field: dari Pengaturan + field yang sudah dipakai kontrak (tanpa duplikat)
+    var fieldOpts = settings().field.slice();
+    S.D.list.concat([k]).forEach(function (x) { if (x.field && fieldOpts.indexOf(x.field) < 0) fieldOpts.push(x.field); });
     if (id) { $('#pageTitle').textContent = 'Edit Kontrak ' + k.no; $('#pageSub').textContent = k.judul || ''; }
     var st = settings(), j = k.jaminan || {};
     var jenis = st.jenis.slice(); if (k.jenis && jenis.indexOf(k.jenis) < 0) jenis.push(k.jenis);
@@ -730,7 +732,8 @@
       fld('Nomor kontrak / OA *', inp('no', k.no, 'required placeholder="mis. 4610012345"')) +
       fld('Jenis kontrak', sel('jenis', jenis, k.jenis)) +
       fld('Kategori', sel('kat', [['Warehouse', 'Kontrak Warehouse'], ['GS', 'Kontrak GS'], ['', 'Lainnya']], k.kat || '')) +
-      fld('Field', inp('field', k.field, 'list="dlField" placeholder="mis. Rantau"') + '<datalist id="dlField">' + Object.keys(flds).map(function (v) { return '<option value="' + esc(v) + '">'; }).join('') + '</datalist>') +
+      fld('Field', sel('fieldSel', fieldOpts.map(function (f) { return [f, f]; }).concat([['', '— tanpa field —'], ['__new', '+ Field lain…']]), k.field || '') +
+        inp('fieldNew', '', 'placeholder="Ketik nama field baru" style="margin-top:6px" hidden')) +
       fld('Nama singkat (tampil di kartu)', inp('short', k.short, 'placeholder="mis. Crane 55 Ton & Tronton"'), 'wide') +
       fld('Judul / nama pekerjaan *', inp('judul', k.judul, 'required placeholder="mis. Pengadaan Valve & Fitting Zona 1"'), 'wide') +
       fld('Vendor / penyedia', inp('vendor', k.vendor, 'list="dlVendor"') + '<datalist id="dlVendor">' + Object.keys(vendors).map(function (v) { return '<option value="' + esc(v) + '">'; }).join('') + '</datalist>') +
@@ -753,10 +756,11 @@
   async function submitForm(form) {
     var id = form.getAttribute('data-id'), g = function (n) { var el = form.querySelector('[name="' + n + '"]'); return el ? el.value.trim() : ''; };
     var rec = {
-      no: g('no'), jenis: g('jenis'), kat: g('kat'), field: g('field'), short: g('short'), judul: g('judul'), vendor: g('vendor'), vendorCode: g('vendorCode'), fungsi: g('fungsi'), pic: g('pic'),
+      no: g('no'), jenis: g('jenis'), kat: g('kat'), field: g('fieldSel') === '__new' ? g('fieldNew') : g('fieldSel'), short: g('short'), judul: g('judul'), vendor: g('vendor'), vendorCode: g('vendorCode'), fungsi: g('fungsi'), pic: g('pic'),
       mulai: g('mulai'), akhir: g('akhir'), nilai: parseNum(g('nilai')), cur: g('cur') || 'IDR', pg: g('pg').toUpperCase(), tindak: g('tindak'), catatan: g('catatan'),
       jaminan: { no: g('jNo'), bank: g('jBank'), nilai: parseNum(g('jNilai')), akhir: g('jAkhir') }
     };
+    if (g('fieldSel') === '__new' && !rec.field) { toast('Ketik nama field baru, atau pilih dari daftar', true); return; }
     if (!rec.no || !rec.judul || !rec.akhir) { toast('Nomor kontrak, judul & tanggal berakhir wajib diisi', true); return; }
     if (rec.mulai && rec.akhir < rec.mulai) { toast('Tanggal berakhir lebih awal dari tanggal mulai', true); return; }
     var dup = S.D.list.filter(function (x) { return x.no === rec.no && x.id !== id; })[0];
@@ -1358,7 +1362,8 @@
       fld('Peringatan serapan nilai (%)', '<input class="input" type="number" name="absorb" min="1" max="200" value="' + st.absorbWarn + '">') + '</div>' +
       '<div class="set-grid" style="margin-top:12px">' +
       fld('Jenis kontrak (satu per baris)', '<textarea class="input" name="jenis" rows="6">' + esc(st.jenis.join('\n')) + '</textarea>') +
-      fld('Fungsi pengguna (satu per baris)', '<textarea class="input" name="fungsi" rows="6">' + esc(st.fungsi.join('\n')) + '</textarea>') + '</div>' +
+      fld('Fungsi pengguna (satu per baris)', '<textarea class="input" name="fungsi" rows="6">' + esc(st.fungsi.join('\n')) + '</textarea>') +
+      fld('Field (satu per baris)', '<textarea class="input" name="field" rows="6">' + esc(st.field.join('\n')) + '</textarea>') + '</div>' +
       '<div class="toolbar" style="margin-top:12px"><button class="btn sm primary" type="submit">Simpan pengaturan</button></div></form>'
       : '<div class="small" style="line-height:1.8">Segera berakhir ≤ <b>' + st.warn + '</b> hari · Kritis ≤ <b>' + st.crit + '</b> hari · Peringatan serapan ≥ <b>' + st.absorbWarn + '%</b></div>');
 
@@ -1534,6 +1539,7 @@
   document.addEventListener('change', function (e) {
     var t = e.target;
     if (t.id === 'kjenis') { S.f.jenis = t.value; Store.save('filters', S.f); renderRows(); }
+    else if (t.name === 'fieldSel' && t.closest('#kForm')) { var fn = t.form.querySelector('[name="fieldNew"]'); fn.hidden = t.value !== '__new'; if (!fn.hidden) fn.focus(); }
     else if (t.id === 'kfungsi') { S.f.fungsi = t.value; Store.save('filters', S.f); renderRows(); }
     else if (t.id === 'ksort') { S.f.sort = t.value; Store.save('filters', S.f); renderRows(); }
     else if (t.id === 'dueH') { S.dueH = +t.value; renderDue(); }
@@ -1564,7 +1570,7 @@
     } else if (f.id === 'setForm') {
       e.preventDefault();
       var lines = function (s) { return s.split('\n').map(function (x) { return x.trim(); }).filter(Boolean); };
-      var ns = { warn: Math.max(1, +f.warn.value || 90), crit: Math.max(1, +f.crit.value || 30), absorbWarn: Math.max(1, +f.absorb.value || 90), jenis: lines(f.jenis.value), fungsi: lines(f.fungsi.value) };
+      var ns = { warn: Math.max(1, +f.warn.value || 90), crit: Math.max(1, +f.crit.value || 30), absorbWarn: Math.max(1, +f.absorb.value || 90), jenis: lines(f.jenis.value), fungsi: lines(f.fungsi.value), field: lines(f.field.value) };
       if (ns.crit > ns.warn) { toast('Hari "Kritis" harus lebih kecil dari "Segera berakhir"', true); return; }
       save(function (D) { D.settings = Object.assign({}, Model.settingsOf(D), ns); }, 'Pengaturan pengingat').then(function (ok) { if (ok) { toast('Pengaturan disimpan'); render(); } });
     }
