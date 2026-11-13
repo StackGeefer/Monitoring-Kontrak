@@ -382,18 +382,46 @@
         return Object.assign({}, r, { stt: stt, lt: wd == null ? null : Math.max(0, wd - 1), clients: wkClients(r.wk) });
       });
     }
+    // Expediting = baris file progres (dilengkapi otomatis dari ME2N) + RO yang terbit dari Permintaan RO
     function exRows() {
       var P = (S.sap && S.sap.pr) || { expediting: [] }, I = idx(), t = today();
-      return P.expediting.map(function (r, _i) {
-        r = Object.assign({ _i: _i }, r);
-        var sap = r.po ? I.poByNo[r.po] : null;
+      var reqs = Oa ? Oa.roList() : [], reqByRo = {};
+      reqs.forEach(function (q) { if (q.roNo) reqByRo[q.roNo] = q; });
+      var stOf = function (r, sap) {
         var fin = /selesai/i.test(r.st || '');
         var got = !fin && sap && sap.out <= 0.5 && !/routing|approval/i.test(r.st);
-        var late = !got && !fin && (/late/i.test(r.st) || (/deliver/i.test(r.st) && r.deliv && r.deliv < t));
-        var stt = fin ? 'Selesai' : got ? 'Sudah diterima (SAP)' : /late/i.test(r.st) ? 'Outstanding (late)' : /routing|approval/i.test(r.st) ? 'Routing Approval' : /deliver/i.test(r.st) ? (r.deliv && r.deliv < t ? 'Lewat delivery date' : 'PO/RO on delivery') : (r.st || '—');
-        return Object.assign({}, r, { sap: sap, late: late, stt: stt, days: r.deliv ? ctx.Model.dayDiff(t, r.deliv) : null, clients: wkClients(r.wk) });
+        var late = !got && !fin && (/late/i.test(r.st) || (sap ? sap.late : /deliver/i.test(r.st) && r.deliv && r.deliv < t));
+        var stt = fin ? 'Selesai' : got ? 'Sudah diterima (SAP)' : late ? (/late/i.test(r.st) ? 'Outstanding (late)' : 'Lewat delivery date') : /routing|approval/i.test(r.st) ? 'Routing Approval' : 'PO/RO on delivery';
+        return { late: late, stt: stt };
+      };
+      var rows = P.expediting.map(function (r, _i) {
+        r = Object.assign({ _i: _i }, r);
+        var sap = r.po ? I.poByNo[r.po] : null, fill = {};
+        if (sap) {
+          if (!r.vendor && sap.p.vendor) { r.vendor = sap.p.vendor; fill.vendor = 1; }
+          if (!r.pr && sap.pr.length) { r.pr = sap.pr[0]; fill.pr = 1; }
+          if (!r.deliv && sap.due) { r.deliv = sap.due; fill.deliv = 1; }
+          if (r.nilai == null && sap.val) { r.nilai = sap.val; r.cur = sap.p.cur; fill.nilai = 1; }
+          if (!r.wk && sap.plants.length) { r.wk = 'PEP ' + (plantName(sap.plants[0]) || sap.plants[0]); fill.wk = 1; }
+        }
+        var s2 = stOf(r, sap), q = r.po && reqByRo[r.po];
+        return Object.assign({}, r, { sap: sap, fill: fill, req: q ? q.id : '', late: s2.late, stt: s2.stt, days: r.deliv ? ctx.Model.dayDiff(t, r.deliv) : null, clients: wkClients(r.wk) });
       });
+      var inFile = {}; rows.forEach(function (r) { if (r.po) inFile[r.po] = 1; });
+      reqs.filter(function (q) { return q.step >= 4 && q.roNo && !inFile[q.roNo] && q.state !== 'Batal'; }).forEach(function (q) {
+        var r = { _i: null, src: 'ro', req: q.id, po: q.roNo, pr: q.pr, wk: 'PEP ' + (plantName(q.plant) || q.plant || ''), desc: (q.items[0] || {}).d + (q.items.length > 1 ? ' +' + (q.items.length - 1) + ' item' : ''),
+          vendor: q.vendor, nilai: q.doc ? q.doc.val : q.nilai, cur: q.doc ? q.doc.p.cur : q.cur, deliv: q.deliv, st: q.state === 'Selesai' ? 'Selesai' : 'PO/RO on delivery', note: 'Dari Permintaan RO · OA ' + q.oa, fill: {} };
+        var s3 = stOf(r, q.doc);
+        rows.push(Object.assign(r, { sap: q.doc, late: s3.late, stt: s3.stt, days: r.deliv ? ctx.Model.dayDiff(t, r.deliv) : null, clients: [q.c] }));
+      });
+      return rows;
     }
+    function oaLink(no) {
+      if (!no) return '';
+      var x = idx().oas.filter(function (y) { return y.no === String(no).trim(); })[0];
+      return '<div style="margin-top:3px">' + (x ? '<a class="badge ok" href="#/oa/' + esc(x.c + '/' + x.no) + '">OA ' + esc(x.no) + ' →</a>' : '<span class="badge">OA ' + esc(no) + '</span>') + '</div>';
+    }
+    function sapMark(r, f) { return r.fill && r.fill[f] ? ' <span class="sap-mk" title="Diisi otomatis dari data SAP ME2N">SAP</span>' : ''; }
     // ---------- edit langsung di website (tanpa upload ulang Excel) ----------
     function edInfo(r, kind) {
       return (r.ed ? '<div class="small muted" style="margin-top:4px">diubah ' + esc(r.ed.by) + ' · ' + ctx.fmtDate((r.ed.at || '').slice(0, 10)) + '</div>' : '') +
@@ -418,7 +446,8 @@
       if (kind === 'pr') html = '<div class="fleet-form">' + f('Deskripsi *', inp('desc', o.desc, 'required'), 'wide') +
         f('Status', sel('st', [['', 'Pipeline / belum PR'], 'On Planning', 'On Progress', 'On Review', 'Need Confirmation', 'Selesai', 'Batal'], /cancel/i.test(o.note || '') ? 'Batal' : o.st || '')) + f('Tahapan / catatan', inp('note', o.note, 'placeholder="mis. Evaluasi teknis"')) +
         f('No. PR', inp('pr', o.pr)) + f('Project Request No.', inp('prq', o.prq)) + f('Tgl project request', inp('tgl', o.tgl, 'type="date"')) + f('PIC buyer', inp('pic', o.pic)) +
-        f('WK / Field', inp('wk', o.wk, 'placeholder="mis. PEP Zona 1"')) + f('Vendor', inp('vendor', o.vendor)) + f('Nilai', inp('nilai', nv, 'inputmode="decimal"')) + f('Mata uang', sel('cur', ['IDR', 'USD'], o.cur || 'IDR')) + '</div>';
+        f('WK / Field', inp('wk', o.wk, 'placeholder="mis. PEP Zona 1"')) + f('Vendor pemenang', inp('vendor', o.vendor)) + f('Nilai', inp('nilai', nv, 'inputmode="decimal"')) + f('Mata uang', sel('cur', ['IDR', 'USD'], o.cur || 'IDR')) +
+        f('No. kontrak / OA hasil', inp('oa', o.oa, 'placeholder="diisi setelah kontrak terbit"'), 'wide') + '</div>';
       else html = '<div class="fleet-form">' + f('Deskripsi *', inp('desc', o.desc, 'required'), 'wide') +
         f('Status', sel('st', ['PO/RO on delivery', 'Outstanding (late)', 'Routing Approval', 'Selesai'], /late/i.test(o.st || '') ? 'Outstanding (late)' : /routing/i.test(o.st || '') ? 'Routing Approval' : /selesai/i.test(o.st || '') ? 'Selesai' : 'PO/RO on delivery')) + f('Delivery date', inp('deliv', o.deliv, 'type="date"')) +
         f('No. PO / RO', inp('po', o.po)) + f('No. PR', inp('pr', o.pr)) + f('WK / Field', inp('wk', o.wk, 'placeholder="mis. PEP Rantau"')) + f('Vendor', inp('vendor', o.vendor)) +
@@ -451,10 +480,30 @@
       var tab = V.pr.tab;
       var src = S.sap.src && S.sap.src.progres;
       view.innerHTML = '<div class="toolbar" style="margin-bottom:12px">' + clientChips() + '<span class="spacer"></span>' + (src ? '<div class="src-line small muted">File: <b>' + esc(src.file || '') + '</b> · update ' + ctx.fmtDate(src.date) + '</div>' : '') + '</div>' +
-        '<div class="mk-tabs">' + (Oa ? '<button class="mk-tab' + (tab === 'ro' ? ' on' : '') + '" data-prtab="ro">Permintaan RO <span class="chip-n">' + Oa.roList().filter(function (r) { return clientOk(r.c); }).length + '</span></button>' : '') + '<button class="mk-tab' + (tab === 'pengadaan' ? ' on' : '') + '" data-prtab="pengadaan">Pengadaan (PR) <span class="chip-n">' + prRows().filter(function (r) { return wkOk(r.wk); }).length + '</span></button>' +
-        '<button class="mk-tab' + (tab === 'expediting' ? ' on' : '') + '" data-prtab="expediting">Expediting (PO / RO) <span class="chip-n">' + exRows().filter(function (r) { return wkOk(r.wk); }).length + '</span></button></div>' +
+        flowStrip(tab) +
+        '<div class="mk-tabs">' + (Oa ? '<button class="mk-tab' + (tab === 'ro' ? ' on' : '') + '" data-prtab="ro">Permintaan RO <span class="chip-n">' + Oa.roList().filter(function (r) { return clientOk(r.c) && r.step > 0 && r.step < 6; }).length + '</span></button>' : '') +
+        '<button class="mk-tab' + (tab === 'expediting' ? ' on' : '') + '" data-prtab="expediting">Expediting PO / RO <span class="chip-n">' + exRows().filter(function (r) { return wkOk(r.wk); }).length + '</span></button>' +
+        '<button class="mk-tab' + (tab === 'pengadaan' ? ' on' : '') + '" data-prtab="pengadaan">Pengadaan Kontrak <span class="chip-n">' + prRows().filter(function (r) { return wkOk(r.wk); }).length + '</span></button></div>' +
         '<div id="prBox"></div>';
       if (tab === 'ro' && Oa) Oa.renderTab($('#prBox')); else if (tab === 'pengadaan') renderPengadaan(); else renderExpediting();
+    }
+    // Alur lengkap: tender kontrak → OA → permintaan RO → approval MIM → PR → RO → delivery
+    function flowStrip(tab) {
+      var reqs = Oa ? Oa.roList().filter(function (r) { return clientOk(r.c); }) : [];
+      var n = function (f) { return reqs.filter(f).length; };
+      var ex = exRows().filter(function (r) { return wkOk(r.wk); });
+      var steps = [
+        ['pengadaan', 'Pengadaan kontrak', prRows().filter(function (r) { return wkOk(r.wk) && /Progress|Planning|Review|Confirmation/.test(r.stt); }).length, 'tender berjalan'],
+        ['oa', 'Kontrak OA', idx().oas.filter(function (x) { return clientOk(x.c) && x.st !== 'expired' && /X07|X02/.test(x.o.pg); }).length, 'OA aktif'],
+        ['ro', 'Permintaan RO', n(function (r) { return r.state === 'Menunggu approval MIM'; }), 'menunggu approval MIM'],
+        ['ro', 'PR', n(function (r) { return /Disetujui|PR /.test(r.state); }), 'proses PR'],
+        ['expediting', 'RO terbit · delivery', ex.filter(function (r) { return !/SAP|Selesai/.test(r.stt); }).length, ex.filter(function (r) { return r.late; }).length + ' terlambat'],
+        ['expediting', 'Diterima', ex.filter(function (r) { return /SAP|Selesai/.test(r.stt); }).length + n(function (r) { return r.step === 6 && !r.roNo; }), 'GR / selesai']];
+      return '<div class="flow">' + steps.map(function (s, i) {
+        var on = s[0] === tab && (tab !== 'ro' || i === 2 || i === 3) && (tab !== 'expediting' || i === 4 || i === 5);
+        return (i ? '<span class="flow-ar">→</span>' : '') + (s[0] === 'oa' ? '<a class="flow-st" href="#/oa">' : '<button class="flow-st' + (on ? ' on' : '') + '" data-prtab="' + s[0] + '">') +
+          '<b>' + s[2] + '</b><span>' + s[1] + '</span><small>' + s[3] + '</small>' + (s[0] === 'oa' ? '</a>' : '</button>');
+      }).join('') + '</div>';
     }
     function sumCur(list) {
       var t = {}; list.forEach(function (r) { if (r.nilai) t[r.cur || 'IDR'] = (t[r.cur || 'IDR'] || 0) + r.nilai; });
@@ -483,7 +532,7 @@
           '<td class="mono small">' + D(r.prq) + '</td><td class="mono small">' + (r.pr ? esc(r.pr).replace(/\s*&amp;\s*/g, '<br>') : '<span class="muted">—</span>') + '</td>' +
           '<td style="min-width:150px"><div class="mat-desc">' + esc(r.desc) + '</div></td>' +
           '<td><span class="badge ' + (PR_ST[r.stt] || (r.stt === 'Batal' ? '' : 'out')) + '" title="' + esc(r.stt) + '">' + esc(r.stt.replace(' / belum PR', '').replace('Belum ada status', 'Belum ada')) + '</span></td>' +
-          '<td class="small" style="min-width:110px">' + D(/cancel/i.test(r.note || '') && r.stt === 'Batal' ? '' : r.note) + '</td>' +
+          '<td class="small" style="min-width:110px">' + D(/cancel/i.test(r.note || '') && r.stt === 'Batal' ? '' : r.note) + oaLink(r.oa) + '</td>' +
           '<td class="small">' + D(r.wk) + '<div>' + r.clients.map(clientBadge).join(' ') + '</div></td>' +
           '<td class="num nowrap" title=""' + (r.nilai != null ? esc(ctx.fmtMoney(r.nilai, r.cur)) : '') + '">' + (r.nilai != null ? '<b>' + esc(money(r.nilai, r.cur)) + '</b>' : '<span class="muted">—</span>') + '</td><td class="small">' + D(r.pic) + '</td>' +
           '<td class="num">' + (r.lt != null ? '<span class="badge ' + (r.lt > 90 ? 'bad' : r.lt > 60 ? 'warn' : '') + '">' + r.lt + ' HK</span>' : '<span class="muted">—</span>') + '</td>' +
@@ -516,18 +565,18 @@
       var wkRows = Object.keys(wk).sort().map(function (k) { var w = wk[k]; return '<tr><td><b>' + esc(k) + '</b></td><td class="num">' + w.d + '</td><td class="num">' + (w.l ? '<span class="badge bad">' + w.l + '</span>' : 0) + '</td><td class="num">' + w.a + '</td><td class="num">' + (w.r ? '<span class="badge ok">' + w.r + '</span>' : 0) + '</td><td class="num"><b>' + w.n + '</b></td></tr>'; }).join('');
       var D = function (v) { return v ? esc(v) : '<span class="muted">—</span>'; };
       var edC = function (r, kind) { return '<td class="small muted nowrap">' + (r.ed ? esc(r.ed.by) + '<div>' + ctx.fmtDate((r.ed.at || '').slice(0, 10)) + '</div>' : '—') + '</td>' +
-        (ctx.canWrite() ? '<td class="c pick-col"><button class="btn sm" data-act="pr-edit" data-kind="' + kind + '" data-i="' + r._i + '">' + ICON.edit + ' Update</button></td>' : ''); };
+        (ctx.canWrite() ? '<td class="c pick-col">' + (r.src === 'ro' ? '<button class="btn sm" data-act="ro-open" data-id="' + esc(r.req) + '">Lihat</button>' : '<button class="btn sm" data-act="pr-edit" data-kind="' + kind + '" data-i="' + r._i + '">' + ICON.edit + ' Update</button>') + '</td>' : ''); };
       var rows = list.map(function (r, n) {
         var s = r.sap, sapTxt;
         if (s) sapTxt = s.out <= 0.5 ? '<span class="badge ok">Diterima penuh</span>' : ctx.pct(s.recv) + ' diterima<div class="muted">sisa ' + esc(money(s.out, s.p.cur)) + '</div>';
         else sapTxt = r.po ? '<span class="muted">tidak ada di ME2N</span>' : '<span class="muted">—</span>';
         var mim = s && s.out > 0.5 ? poNote(s.c, s.no) : null;
-        return '<tr' + (s ? ' class="clickable" data-po="' + esc(s.c + '/' + s.no) + '"' : '') + '><td class="small muted">' + (n + 1) + '</td><td class="mono small">' + D(r.pr) + '</td>' +
+        return '<tr' + (s ? ' class="clickable" data-po="' + esc(s.c + '/' + s.no) + '"' : '') + '><td class="small muted">' + (n + 1) + '</td><td class="mono small">' + D(r.pr) + sapMark(r, 'pr') + '</td>' +
           '<td class="mono" style="font-weight:700;color:var(--brand)">' + D(r.po) + '</td>' +
-          '<td style="min-width:170px"><div class="mat-desc">' + esc(r.desc) + '</div></td>' +
-          '<td><span class="badge ' + (r.late ? 'bad' : /Routing/.test(r.stt) ? 'warn' : /SAP|Selesai/.test(r.stt) ? 'ok' : 'ro') + '">' + esc(r.stt) + '</span></td><td class="small nowrap">' + D(r.wk) + ' ' + r.clients.map(clientBadge).join(' ') + '</td><td class="small">' + D(r.vendor) + '</td>' +
+          '<td style="min-width:170px"><div class="mat-desc">' + esc(r.desc) + '</div>' + (r.req ? '<span class="badge ro" style="margin-top:3px">Permintaan RO</span>' : '') + '</td>' +
+          '<td><span class="badge ' + (r.late ? 'bad' : /Routing/.test(r.stt) ? 'warn' : /SAP|Selesai/.test(r.stt) ? 'ok' : 'ro') + '">' + esc(r.stt) + '</span></td><td class="small nowrap">' + D(r.wk) + sapMark(r, 'wk') + ' ' + r.clients.map(clientBadge).join(' ') + '</td><td class="small">' + D(r.vendor) + sapMark(r, 'vendor') + '</td>' +
           '<td class="num nowrap" title="' + (r.nilai != null ? esc(ctx.fmtMoney(r.nilai, r.cur)) : '') + '"><b>' + (r.nilai != null ? esc(money(r.nilai, r.cur)) : '—') + '</b></td>' +
-          '<td class="nowrap small"><b>' + (r.deliv ? ctx.fmtDate(r.deliv) : '—') + '</b>' + (r.days != null && !/SAP|Selesai/.test(r.stt) ? '<div>' + (r.days < 0 ? '<span class="badge bad">lewat ' + (-r.days) + ' hr</span>' : '<span class="small muted">' + r.days + ' hari lagi</span>') + '</div>' : '') + '</td>' +
+          '<td class="nowrap small"><b>' + (r.deliv ? ctx.fmtDate(r.deliv) : '—') + '</b>' + sapMark(r, 'deliv') + (r.days != null && !/SAP|Selesai/.test(r.stt) ? '<div>' + (r.days < 0 ? '<span class="badge bad">lewat ' + (-r.days) + ' hr</span>' : '<span class="small muted">' + r.days + ' hari lagi</span>') + '</div>' : '') + '</td>' +
           '<td class="small" style="min-width:130px">' + D(r.note) + (mim ? '<div style="margin-top:3px"><span class="badge ro">MIM: ' + esc(mim.st || 'catatan') + '</span>' + (mim.eta ? ' ETA ' + ctx.fmtDate(mim.eta) : '') + '</div>' : '') + '</td>' +
           '<td class="small nowrap">' + sapTxt + '</td>' + edC(r, 'ex') + '</tr>';
       }).join('');

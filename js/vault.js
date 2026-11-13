@@ -47,7 +47,7 @@
   }
   function newKey() { return C.getRandomValues(new Uint8Array(32)); }
 
-  function canWrite(role) { return role === 'owner' || role === 'writer'; }
+  function canWrite(role) { return role === 'owner' || role === 'writer' || role === 'mim'; }
   function hasAdminKey(role) { return canWrite(role); }
 
   function makeUser(username, password, role, dataKey, displayName, adminKey) {

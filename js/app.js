@@ -72,7 +72,7 @@
   var APP_VERSION = '20261112a'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Monitoring-Kontrak';
   var HERO = [{ path: 'assets/hero/pertamina-1-kilang.jpg', pos: '74% 40%' }, { path: 'assets/hero/pertamina-2-gudang.jpg', pos: '30% 60%' }];
-  var ROLE_LABEL = { owner: 'Owner Utama', writer: 'Owner', viewer: 'Reader' };
+  var ROLE_LABEL = { owner: 'Owner Utama', writer: 'Owner', mim: 'MIM', viewer: 'Reader' };
   var DOC_CATS = ['Kontrak', 'Amandemen', 'Jaminan Pelaksanaan', 'BAPP / BAST', 'Invoice', 'Korespondensi', 'Lainnya'];
 
   // ================= State =================
@@ -124,7 +124,8 @@
   var Oa = OaMod({
     S: S, esc: esc, ICON: ICON, Sap: Sap, Store: Store, Model: Model, GH: GH, Vault: Vault, nf0: nf0,
     fmtDate: fmtDate, fmtDateTime: fmtDateTime, fmtMoney: fmtMoney, fmtBig: fmtBig, fmtQ: fmtQ, pct: pct, toast: toast, loading: loading,
-    modal: modal, fld: fld, inp: inp, sel: sel, loadScript: loadScript,
+    modal: modal, confirmBox: confirmBox, fld: fld, inp: inp, sel: sel, loadScript: loadScript, audit: function (D, w, l, d) { addAudit(D, w, l, d); },
+    canApprove: function () { return role() === 'mim' || role() === 'owner'; },
     save: function (m, msg, x) { return save(m, msg, x); }, canWrite: function () { return canWrite(); }, me: function () { return me(); },
     render: function () { render(); }, closeDrawer: function () { closeDrawer(); }, settings: function () { return settings(); },
     warehouseUrl: function () { return warehouseUrl(); }, ensureToken: function () { return ensureToken(); }, whKey: function (p) { return whKey(p); }
@@ -141,7 +142,7 @@
   function isOwner() { return role() === 'owner'; }
   function canWrite() { return Vault.canWrite(role()); }
   function roleLabel(r) { return ROLE_LABEL[r] || r; }
-  function roleBadge(r) { return '<span class="badge ' + ({ owner: 'ok', writer: 'ok' }[r] || '') + '">' + roleLabel(r) + '</span>'; }
+  function roleBadge(r) { return '<span class="badge ' + ({ owner: 'ok', writer: 'ok', mim: 'ro' }[r] || '') + '">' + roleLabel(r) + '</span>'; }
   function me() { return S.user ? S.user.name : ''; }
 
   // ================= UI dasar =================
@@ -1305,10 +1306,10 @@
     var users = '';
     if (owner) {
       var rows = S.users.map(function (u) {
-        var self = S.user && u.id === S.user.id, warn = u.role === 'writer' && !u.ak ? ' <span class="badge warn" title="Isi password orang tsb lalu Simpan agar bisa menyimpan data">belum bisa simpan</span>' : '';
+        var self = S.user && u.id === S.user.id, warn = Vault.hasAdminKey(u.role) && u.role !== 'owner' && !u.ak ? ' <span class="badge warn" title="Isi password orang tsb lalu Simpan agar bisa menyimpan data">belum bisa simpan</span>' : '';
         var ctl = self || u.role === 'owner' ? '' :
-          '<select class="select sm" data-urole>' + ['writer', 'viewer'].map(function (r) { return '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + roleLabel(r) + '</option>'; }).join('') + '</select>' +
-          '<input class="input sm" type="password" data-upw placeholder="' + (u.role === 'writer' && u.ak ? 'Password baru (opsional)' : 'Password orang tsb (wajib)') + '" autocomplete="new-password" style="width:200px">' +
+          '<select class="select sm" data-urole>' + ['writer', 'mim', 'viewer'].map(function (r) { return '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + roleLabel(r) + '</option>'; }).join('') + '</select>' +
+          '<input class="input sm" type="password" data-upw placeholder="' + (Vault.hasAdminKey(u.role) && u.ak ? 'Password baru (opsional)' : 'Password orang tsb (wajib)') + '" autocomplete="new-password" style="width:200px">' +
           '<button class="btn sm" data-act="user-save">Simpan</button><button class="btn sm danger" data-act="user-del" title="Hapus pengguna">' + ICON.trash + '</button>';
         return '<tr data-uid="' + esc(u.id) + '"><td><b>' + esc(u.name) + '</b>' + (self ? ' <span class="badge ro">Anda</span>' : '') + '</td><td>' + roleBadge(u.role) + warn + '</td>' +
           '<td class="right"><div class="toolbar" style="justify-content:flex-end">' + ctl + '</div></td></tr>';
@@ -1319,9 +1320,9 @@
         '<div><div style="font-weight:700;margin-bottom:6px">Tambah pengguna</div><form id="addUser" class="toolbar" autocomplete="off">' +
         '<input class="input sm" name="u" placeholder="Username" required autocomplete="off">' +
         '<input class="input sm" type="password" name="pw" placeholder="Password" required minlength="6" autocomplete="new-password">' +
-        '<select class="select sm" name="role"><option value="writer">Owner (bisa mengedit)</option><option value="viewer">Reader (lihat saja)</option></select>' +
+        '<select class="select sm" name="role"><option value="writer">Owner (bisa mengedit)</option><option value="mim">MIM (approve Permintaan RO, proses PR / RO)</option><option value="viewer">Reader (lihat saja)</option></select>' +
         '<button class="btn sm primary" type="submit">Tambah</button></form></div>' + pwBox + '</div>' +
-        '<div class="small muted" style="margin-top:10px"><b>Owner</b> bisa mengedit semua data · <b>Reader</b> hanya melihat · pengguna &amp; token GitHub diatur Owner Utama.</div>');
+        '<div class="small muted" style="margin-top:10px"><b>Owner</b> bisa mengedit semua data · <b>MIM</b> mengedit + approve Permintaan RO &amp; proses PR/RO · <b>Reader</b> hanya melihat · pengguna &amp; token GitHub diatur Owner Utama.</div>');
     } else if (w) {
       users = sec('Akun saya', pwBox);
     }
@@ -1423,7 +1424,7 @@
     if (pw.length < 6) { toast('Password minimal 6 karakter', true); return; }
     var h = await Vault.hashUser(u);
     if (S.users.some(function (x) { return x.id === h; })) { toast('Username sudah ada', true); return; }
-    if (r === 'writer' && !S.adminKey) { toast('Kunci akses belum tersedia — logout lalu login ulang sebagai Owner', true); return; }
+    if (Vault.hasAdminKey(r) && !S.adminKey) { toast('Kunci akses belum tersedia — logout lalu login ulang sebagai Owner', true); return; }
     loading('Membuat akun…');
     var entry = await Vault.makeUser(u, pw, r, S.key, u, S.adminKey);
     if (await saveUsers(function (list) { return list.filter(function (x) { return x.id !== entry.id; }).concat([entry]); }, 'Tambah pengguna ' + u + ' (' + roleLabel(r) + ')')) {
@@ -1440,11 +1441,11 @@
       loading('Menyimpan…');
       entry = await Vault.makeUser(u.name, pw, r, S.key, u.name, S.adminKey);
       entry.id = u.id;
-    } else if (r === 'writer' && !u.ak) {
+    } else if (Vault.hasAdminKey(r) && !u.ak) {
       toast('Untuk menjadikan Writer, isi password baru ' + u.name + ' (akses simpan dikunci dengan password)', true); return;
     } else {
       entry = Object.assign({}, u, { role: r });
-      if (r !== 'writer') { delete entry.ak; delete entry.aiv; }
+      if (!Vault.hasAdminKey(r)) { delete entry.ak; delete entry.aiv; }
     }
     if (await saveUsers(function (list) { return list.map(function (x) { return x.id === id ? entry : x; }); }, 'Pengguna ' + u.name + ' → ' + roleLabel(r) + (pw ? ' (password diatur ulang)' : ''))) {
       toast('Pengguna ' + u.name + ' disimpan' + (pw ? ' — berikan password baru ke yang bersangkutan' : '')); renderSettings();

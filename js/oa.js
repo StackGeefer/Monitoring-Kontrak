@@ -9,7 +9,7 @@
   var PG_MAIN = ['X07', 'X02'];
   var PG_LABEL = { X07: 'Zona 1', X02: 'Regional 1' };
   var PLANT_NAME = { W101: 'Rantau', W803: 'Lirik', W802: 'Jambi', W102: 'Pangkalan Susu' };
-  var RO_ST = { 'Menunggu PR': 'warn', 'PR dibuat': 'ro', 'RO terbit': 'bau', Diterima: 'ok', Selesai: 'ok', Batal: '' };
+  var RO_ST = { 'Menunggu approval MIM': 'warn', 'Disetujui MIM': 'ro', 'PR need approval': 'ro', 'PR terbit': 'ro', 'RO terbit': 'bau', Diterima: 'ok', Selesai: 'ok', Ditolak: 'bad', Batal: '' };
   var PAGE = 60;
 
   function OaMod(ctx) {
@@ -113,7 +113,7 @@
       if (!box) return;
       var tot = list.reduce(function (a, x) { return a + Sap.idr(x.sisa, x.o.cur); }, 0), soon = list.filter(function (x) { return x.st === 'warn' || x.st === 'crit'; }).length;
       var html = list.slice(0, V.n).map(function (x) {
-        var o = x.o, sx = stats(x), d = x.days, rq = reqsOf(x.c, x.no).filter(function (r) { return !/Diterima|Selesai|Batal/.test(r.state); }).length;
+        var o = x.o, sx = stats(x), d = x.days, rq = reqsOf(x.c, x.no).filter(function (r) { return !/Diterima|Selesai|Batal|Ditolak/.test(r.state); }).length;
         var badge = x.st === 'expired' ? '<span class="badge bad">Berakhir</span>' : '<span class="badge ' + (x.st === 'crit' ? 'bad' : x.st === 'warn' ? 'warn' : 'ok') + '">Aktif · ' + ctx.nf0.format(d) + ' hari</span>';
         var usedTxt = hasStok() && x.c === '100';
         return '<a class="card oa-card" href="#/oa/' + esc(x.c + '/' + x.no) + '">' +
@@ -159,7 +159,7 @@
       var reqHtml = reqs.length ? '<div class="card card-pad" style="margin-bottom:14px"><div class="toolbar" style="margin-bottom:10px"><h3 class="section-title" style="margin:0">Permintaan RO untuk OA ini</h3><span class="badge">' + reqs.length + '</span><span class="spacer"></span><a class="small" href="#/progres" data-prtab="ro">Buka di Progres →</a></div>' +
         '<div class="table-wrap" style="box-shadow:none"><table class="grid"><thead><tr><th>Diajukan</th><th>Item</th><th class="num">Nilai</th><th>Status</th><th>No. PR</th><th>No. RO</th></tr></thead><tbody>' + reqs.map(function (r) {
           return '<tr class="clickable" data-roreq="' + esc(r.id) + '"><td class="nowrap small"><b>' + ctx.fmtDate((r.at || '').slice(0, 10)) + '</b><div class="muted">' + esc(r.by || '') + '</div></td><td>' + r.items.length + ' item<div class="small muted ell">' + esc(r.items.map(function (i) { return i.d; }).join(', ')) + '</div></td>' +
-            '<td class="num nowrap"><b>' + esc(ctx.fmtBig(r.nilai, r.cur)) + '</b></td><td>' + stBadge(r) + '</td><td class="mono small">' + esc(r.pr || '—') + '</td><td class="mono small">' + esc(r.roNo || '—') + '</td></tr>';
+            '<td class="num nowrap"><b>' + esc(ctx.fmtBig(r.nilai, r.cur)) + '</b></td><td>' + stBadge(r) + stepper(r) + '</td><td class="mono small">' + esc(r.pr || '—') + '</td><td class="mono small">' + esc(r.roNo || '—') + '</td></tr>';
         }).join('') + '</tbody></table></div></div>' : '';
 
       var ros = x.ros.slice().sort(function (a, b) { return (b.p.dd || '').localeCompare(a.p.dd || ''); });
@@ -227,86 +227,166 @@
         ctx.fld('Dibutuhkan paling lambat', ctx.inp('need', '', 'type="date"')) + ctx.fld('Keperluan / catatan untuk MIM', '<textarea class="input" name="note" rows="3" placeholder="mis. stok Rantau habis, pemakaian rutin sumur…"></textarea>', 'wide') + '</div>', 'Ajukan');
       if (!r) return;
       var id = 'RQ' + Date.now().toString(36), now = new Date().toISOString();
-      var rec = { id: id, c: x.c, oa: x.no, vendor: x.o.vendor, pg: x.o.pg, cur: x.o.cur, plant: r.plant, need: r.need, note: r.note.trim(), items: items, nilai: nilai, pr: '', ro: '', pic: '', status: '', by: ctx.me(), at: now, log: [{ at: now, by: ctx.me(), msg: 'Permintaan RO diajukan (' + items.length + ' item)' }] };
+      var rec = { id: id, c: x.c, oa: x.no, vendor: x.o.vendor, pg: x.o.pg, cur: x.o.cur, plant: r.plant, need: r.need, note: r.note.trim(), items: items, nilai: nilai, pr: '', ro: '', pic: '', status: '', by: ctx.me(), at: now, log: [{ at: now, by: ctx.me(), msg: 'Permintaan RO diajukan (' + items.length + ' item) — menunggu approval MIM' }] };
       var ok = await ctx.save(function (D) { D.roReq = (D.roReq || []).filter(function (y) { return y.id !== id; }).concat([rec]); }, 'Permintaan RO OA ' + x.no + ' (' + items.length + ' item)');
-      if (ok) { sel = { key: '', items: {} }; saveSel(); ctx.toast('Permintaan RO diajukan — MIM bisa memproses PR di Progres PR & PO'); ctx.render(); }
+      if (ok) { sel = { key: '', items: {} }; saveSel(); ctx.toast('Permintaan RO diajukan — menunggu approval MIM'); ctx.render(); }
     }
 
     // ================= Permintaan RO (tab di Progres PR & PO) =================
+    // Alur: Diajukan → Approval MIM → PR (need approval → terbit) → RO terbit → Delivery → Diterima
+    var STEPS = ['Diajukan', 'Approval MIM', 'PR', 'RO terbit', 'Delivery', 'Diterima'];
+    function stepOf(state) {
+      return { 'Menunggu approval MIM': 1, 'Disetujui MIM': 2, 'PR need approval': 2, 'PR terbit': 3, 'RO terbit': 4, Diterima: 6, Selesai: 6 }[state] || 0;
+    }
     function roList() {
       var I = Sap.idx(), byPr = {};
       I.pos.forEach(function (x) { x.pr.forEach(function (p) { (byPr[x.c + ':' + p] = byPr[x.c + ':' + p] || []).push(x); }); });
       return ((S.D && S.D.roReq) || []).map(function (r) {
         var doc = r.ro ? I.poByNo[r.ro] : null, auto = false;
         if (!doc && r.pr) { var hit = (byPr[r.c + ':' + r.pr] || []).filter(function (x) { return x.oa.indexOf(r.oa) >= 0; })[0] || (byPr[r.c + ':' + r.pr] || [])[0]; if (hit) { doc = hit; auto = true; } }
-        var state = r.status === 'Batal' ? 'Batal' : r.status === 'Selesai' ? 'Selesai' : doc && doc.out <= 0.5 ? 'Diterima' : doc || r.ro ? 'RO terbit' : r.pr ? 'PR dibuat' : 'Menunggu PR';
-        return Object.assign({}, r, { doc: doc, auto: auto, roNo: r.ro || (doc ? doc.no : ''), state: state, late: !!(doc && doc.late) });
+        var state = r.status === 'Batal' ? 'Batal' : r.rej ? 'Ditolak' : doc && doc.out <= 0.5 ? 'Diterima' : r.status === 'Selesai' ? 'Selesai'
+          : doc || r.ro ? 'RO terbit' : r.pr ? (r.prSt === 'rel' ? 'PR terbit' : 'PR need approval') : r.appr ? 'Disetujui MIM' : 'Menunggu approval MIM';
+        var deliv = doc ? doc.due : r.deliv || '';
+        return Object.assign({}, r, { doc: doc, auto: auto, roNo: r.ro || (doc ? doc.no : ''), state: state, step: stepOf(state), deliv: deliv,
+          days: deliv ? ctx.Model.dayDiff(today(), deliv) : null, late: doc ? !!doc.late : !!(deliv && deliv < today() && state === 'RO terbit') });
       });
     }
-    function stBadge(r) { return '<span class="badge ' + RO_ST[r.state] + '">' + esc(r.state) + '</span>' + (r.late ? ' <span class="badge bad">terlambat</span>' : ''); }
-    function waiting() { return roList().filter(function (r) { return r.state === 'Menunggu PR'; }).length; }
+    function stBadge(r) { return '<span class="badge ' + (RO_ST[r.state] || '') + '">' + esc(r.state) + '</span>' + (r.late ? ' <span class="badge bad">terlambat</span>' : ''); }
+    function stepper(r, big) {
+      if (r.state === 'Batal' || r.state === 'Ditolak') return '<div class="ro-step-x small">' + stBadge(r) + '</div>';
+      return '<div class="ro-steps' + (big ? ' big' : '') + '">' + STEPS.map(function (s, i) {
+        var cls = i < r.step ? 'done' : i === r.step ? 'cur' + (r.late && i === 4 ? ' late' : '') : '';
+        return '<span class="' + cls + '" title="' + esc(s) + '"><i></i>' + (big ? '<em>' + esc(s) + '</em>' : '') + '</span>';
+      }).join('') + '</div>';
+    }
+    function waiting() { return roList().filter(function (r) { return r.state === 'Menunggu approval MIM'; }).length; }
+    var GROUPS = [['appr', 'Menunggu approval MIM', ['Menunggu approval MIM'], 'warn'], ['pr', 'Proses PR', ['Disetujui MIM', 'PR need approval', 'PR terbit'], ''], ['ro', 'RO terbit · delivery', ['RO terbit'], ''], ['done', 'Diterima', ['Diterima', 'Selesai'], 'ok'], ['off', 'Ditolak / batal', ['Ditolak', 'Batal'], '']];
+    function grp(r) { for (var i = 0; i < GROUPS.length; i++) if (GROUPS[i][2].indexOf(r.state) >= 0) return GROUPS[i][0]; return ''; }
+    function delivCell(r) {
+      if (r.state === 'Diterima') return '<span class="badge ok">Diterima penuh</span>';
+      if (r.step < 4) return '<span class="muted">—</span>';
+      var t = r.deliv ? '<b>' + ctx.fmtDate(r.deliv) + '</b>' + (r.days != null ? '<div class="small" style="color:' + (r.days < 0 ? 'var(--bad)">lewat ' + (-r.days) + ' hr' : 'var(--muted)">' + r.days + ' hari lagi') + '</div>' : '') : '<span class="muted">tgl belum ada</span>';
+      return t + (r.doc ? '<div class="small muted">' + ctx.pct(r.doc.recv) + ' diterima (SAP)</div>' : '');
+    }
     function renderTab(box) {
-      var all = roList().filter(function (r) { return Sap.clientOk(r.c); }), w = ctx.canWrite(), q = V.rq.trim().toLowerCase();
-      var cnt = {}; all.forEach(function (r) { cnt[r.state] = (cnt[r.state] || 0) + 1; });
-      var order = ['Menunggu PR', 'PR dibuat', 'RO terbit', 'Diterima', 'Selesai', 'Batal'];
-      var list = all.filter(function (r) { return (!V.rst || r.state === V.rst) && (!q || [r.oa, r.vendor, r.pr, r.roNo, r.by, r.pic, r.note, r.items.map(function (i) { return i.m + ' ' + i.d; }).join(' ')].join(' ').toLowerCase().indexOf(q) >= 0); });
-      list.sort(function (a, b) { return order.indexOf(a.state) - order.indexOf(b.state) || (b.at || '').localeCompare(a.at || ''); });
+      var all = roList().filter(function (r) { return Sap.clientOk(r.c); }), q = V.rq.trim().toLowerCase();
+      var list = all.filter(function (r) { return (!V.rst || grp(r) === V.rst) && (!q || [r.oa, r.vendor, r.pr, r.roNo, r.by, r.pic, r.note, r.items.map(function (i) { return i.m + ' ' + i.d; }).join(' ')].join(' ').toLowerCase().indexOf(q) >= 0); });
+      list.sort(function (a, b) { return (a.step === 6 || a.step === 0 && a.state !== 'Menunggu approval MIM') - (b.step === 6 || b.step === 0 && b.state !== 'Menunggu approval MIM') || a.step - b.step || (b.at || '').localeCompare(a.at || ''); });
       var sum = function (l) { return ctx.fmtBig(l.reduce(function (a, r) { return a + Sap.idr(r.nilai, r.cur); }, 0)); };
-      var k = function (stt, l, cls) { var L = all.filter(function (r) { return r.state === stt; }); return '<div class="kpi kpi-click' + (cls && L.length ? ' kpi-' + cls : '') + '" data-rost="' + stt + '"><div class="k">' + l + '</div><div class="v">' + L.length + '</div><div class="s">' + esc(sum(L)) + '</div></div>'; };
+      var k = function (g) { var L = all.filter(function (r) { return grp(r) === g[0]; }); return '<div class="kpi kpi-click' + (V.rst === g[0] ? ' on' : '') + (g[3] && L.length ? ' kpi-' + g[3] : '') + '" data-rost="' + (V.rst === g[0] ? '' : g[0]) + '"><div class="k">' + g[1] + '</div><div class="v">' + L.length + '</div><div class="s">' + esc(sum(L)) + '</div></div>'; };
       var rows = list.map(function (r, n) {
-        var sap = r.doc ? (r.doc.out <= 0.5 ? '<span class="badge ok">Diterima penuh</span>' : ctx.pct(r.doc.recv) + ' diterima' + (r.doc.days != null ? '<div class="small ' + (r.doc.days < 0 ? '" style="color:var(--bad)">lewat ' + (-r.doc.days) + ' hr' : 'muted">delivery ' + ctx.fmtDate(r.doc.due)) + '</div>' : '')) : '<span class="muted">—</span>';
-        return '<tr class="clickable" data-roreq="' + esc(r.id) + '"><td class="small muted">' + (n + 1) + '</td><td class="nowrap small"><b>' + ctx.fmtDate((r.at || '').slice(0, 10)) + '</b><div class="muted">' + esc(r.by || '') + '</div></td>' +
+        return '<tr class="clickable" data-roreq="' + esc(r.id) + '"><td class="small muted">' + (n + 1) + '</td><td class="nowrap small"><b>' + ctx.fmtDate((r.at || '').slice(0, 10)) + '</b><div class="muted">' + esc(r.by || '') + (r.plant ? ' · ' + esc(plantLabel(r.plant)) : '') + '</div></td>' +
           '<td class="nowrap">' + Sap.clientBadge(r.c) + ' <a class="mono" href="#/oa/' + esc(r.c + '/' + r.oa) + '">' + esc(r.oa) + '</a><div class="small muted">' + esc(r.vendor || '') + '</div></td>' +
-          '<td style="min-width:170px"><b>' + r.items.length + ' item</b><div class="small muted ell" style="max-width:260px">' + esc(r.items.map(function (i) { return i.d; }).join(', ')) + '</div></td>' +
-          '<td class="small nowrap">' + esc(r.plant ? plantLabel(r.plant) : '—') + (r.need ? '<div class="muted">perlu ' + ctx.fmtDate(r.need) + '</div>' : '') + '</td>' +
-          '<td class="num nowrap"><b>' + esc(ctx.fmtBig(r.nilai, r.cur)) + '</b></td><td>' + stBadge(r) + '</td>' +
-          '<td class="mono small">' + esc(r.pr || '—') + '</td><td class="mono small">' + (r.roNo ? esc(r.roNo) + (r.auto ? '<div class="small muted" style="font-family:inherit">otomatis dari SAP</div>' : '') : '—') + '</td><td class="small">' + sap + '</td>' +
-          (w ? '<td class="c pick-col"><button class="btn sm" data-act="ro-upd" data-id="' + esc(r.id) + '">' + ICON.edit + ' Update</button></td>' : '') + '</tr>';
+          '<td style="min-width:160px"><b>' + r.items.length + ' item</b> · ' + esc(ctx.fmtBig(r.nilai, r.cur)) + '<div class="small muted ell" style="max-width:240px">' + esc(r.items.map(function (i) { return i.d; }).join(', ')) + '</div></td>' +
+          '<td style="min-width:150px">' + stBadge(r) + stepper(r) + '</td>' +
+          '<td class="mono small nowrap">' + (r.pr ? esc(r.pr) + '<div class="small" style="font-family:inherit">' + (r.prSt === 'rel' ? '<span style="color:var(--ok)">terbit</span>' : '<span class="muted">need approval</span>') + '</div>' : '—') + '</td>' +
+          '<td class="mono small nowrap">' + (r.roNo ? esc(r.roNo) + (r.auto ? '<div class="small muted" style="font-family:inherit">otomatis dari SAP</div>' : '') : '—') + '</td>' +
+          '<td class="small nowrap">' + delivCell(r) + '</td>' +
+          '<td class="c pick-col">' + actBtn(r, true) + '</td></tr>';
       }).join('');
-      box.innerHTML = '<div class="kpis" style="margin:14px 0">' + k('Menunggu PR', 'Menunggu PR', 'warn') + k('PR dibuat', 'PR dibuat · menunggu RO') + k('RO terbit', 'RO terbit · dikirim') + k('Diterima', 'Diterima', 'ok') + '</div>' +
+      box.innerHTML = '<div class="kpis" style="margin:14px 0">' + GROUPS.slice(0, 4).map(k).join('') + '</div>' +
         '<div class="card card-pad" style="margin-bottom:14px;display:flex;flex-direction:column;gap:12px"><div class="toolbar"><div class="searchbox" style="flex:1;min-width:240px">' + ICON.search.replace('<svg', '<svg style="left:12px;width:18px;height:18px"') +
-        '<input id="rqq" class="input" style="height:40px;padding-left:38px;font-size:14px;border-radius:10px;box-shadow:none" placeholder="Cari OA, vendor, material, no. PR / RO…" value="' + esc(V.rq) + '"></div><a class="btn" href="#/oa">' + ICON.plus + ' Buat dari Kontrak OA</a></div>' +
-        '<div class="chips"><span class="chip-toggle' + (!V.rst ? ' on' : '') + '" data-rost="">Semua<span class="chip-n">' + all.length + '</span></span>' + order.filter(function (s) { return cnt[s]; }).map(function (s) { return '<span class="chip-toggle' + (V.rst === s ? ' on' : '') + '" data-rost="' + s + '">' + s + '<span class="chip-n">' + cnt[s] + '</span></span>'; }).join('') + '</div></div>' +
-        (list.length ? '<div class="table-wrap tall"><table class="grid"><thead><tr><th>No.</th><th>Diajukan</th><th>OA</th><th>Item</th><th>Field</th><th class="num">Nilai</th><th>Status</th><th>No. PR</th><th>No. RO</th><th>SAP (ME2N)</th>' + (w ? '<th class="pick-col"></th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+        '<input id="rqq" class="input" style="height:40px;padding-left:38px;font-size:14px;border-radius:10px;box-shadow:none" placeholder="Cari OA, vendor, material, no. PR / RO…" value="' + esc(V.rq) + '"></div>' + (ctx.canWrite() ? '<a class="btn" href="#/oa">' + ICON.plus + ' Ajukan dari Kontrak OA</a>' : '') + '</div>' +
+        '<div class="chips"><span class="chip-toggle' + (!V.rst ? ' on' : '') + '" data-rost="">Semua<span class="chip-n">' + all.length + '</span></span>' + GROUPS.map(function (g) { var nn = all.filter(function (r) { return grp(r) === g[0]; }).length; return nn ? '<span class="chip-toggle' + (V.rst === g[0] ? ' on' : '') + '" data-rost="' + g[0] + '">' + g[1] + '<span class="chip-n">' + nn + '</span></span>' : ''; }).join('') + '</div></div>' +
+        (list.length ? '<div class="table-wrap tall"><table class="grid"><thead><tr><th>No.</th><th>Diajukan</th><th>OA / vendor</th><th>Item · nilai</th><th>Status</th><th>No. PR</th><th>No. RO</th><th>Delivery</th><th class="pick-col"></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
           : '<div class="card empty"><h3>' + (all.length ? 'Tidak ada yang cocok' : 'Belum ada permintaan RO') + '</h3><p>Buka <a href="#/oa">Kontrak OA</a>, pilih kontrak, centang item yang perlu di-RO lalu klik <b>Ajukan Permintaan RO</b>.</p></div>');
+    }
+    // Tombol aksi sesuai tahap & peran
+    function canDel(r) { return ctx.canApprove() || (ctx.canWrite() && r.by === ctx.me() && (r.state === 'Menunggu approval MIM' || r.state === 'Ditolak')); }
+    function actBtn(r, compact) {
+      var A = ctx.canApprove(), lbl;
+      if (r.state === 'Menunggu approval MIM') return A ? '<button class="btn sm primary" data-act="ro-appr" data-id="' + esc(r.id) + '">Approve</button>' : '<span class="small muted">menunggu MIM</span>';
+      if (!A) return compact ? '' : '';
+      lbl = r.state === 'Disetujui MIM' ? 'Input PR' : r.state === 'PR need approval' ? 'PR terbit?' : r.state === 'PR terbit' ? 'Input RO' : r.state === 'RO terbit' ? 'Delivery' : 'Update';
+      return /Diterima|Selesai|Batal|Ditolak/.test(r.state) && compact ? '' : '<button class="btn sm' + (/Input|terbit\?/.test(lbl) ? ' primary' : '') + '" data-act="ro-upd" data-id="' + esc(r.id) + '">' + ICON.edit + ' ' + lbl + '</button>';
     }
     function openReq(id) {
       var r = roList().filter(function (y) { return y.id === id; })[0]; if (!r) return;
-      var d = $('#drawer'), w = ctx.canWrite();
+      var d = $('#drawer'), A = ctx.canApprove();
+      var acts = [];
+      if (r.state === 'Menunggu approval MIM' && A) acts.push('<button class="btn primary" data-act="ro-appr" data-id="' + esc(r.id) + '">Approve</button><button class="btn danger" data-act="ro-rej" data-id="' + esc(r.id) + '">Tolak</button>');
+      else if (A && !/Diterima|Selesai|Batal|Ditolak/.test(r.state)) acts.push(actBtn(r).replace('btn sm', 'btn'));
+      if (A && /Ditolak|Batal/.test(r.state)) acts.push('<button class="btn" data-act="ro-reopen" data-id="' + esc(r.id) + '">Buka kembali</button>');
+      if (canDel(r)) acts.push('<button class="btn danger" data-act="ro-del" data-id="' + esc(r.id) + '">' + ICON.trash + ' Hapus</button>');
+      if (r.state === 'Menunggu approval MIM' && !A) acts.push('<span class="small muted">Menunggu approval dari tim MIM.</span>');
       d.innerHTML = '<div class="drawer-head"><div style="flex:1;min-width:0"><div class="toolbar" style="gap:6px">' + Sap.clientBadge(r.c) + '<span class="badge">Permintaan RO</span>' + stBadge(r) + '</div>' +
         '<h2>OA ' + esc(r.oa) + '</h2><div class="small muted">' + esc(r.vendor || '') + '</div></div><button class="icon-btn" data-act="drawer-close">' + ICON.close + '</button></div>' +
-        '<div class="drawer-body"><div class="kv"><div><span>Diajukan</span>' + esc(r.by || '') + ' · ' + ctx.fmtDateTime(r.at) + '</div><div><span>Untuk field</span>' + esc(r.plant ? plantLabel(r.plant) + ' · ' + r.plant : '—') + '</div>' +
-        '<div><span>Dibutuhkan</span>' + (r.need ? ctx.fmtDate(r.need) : '—') + '</div><div><span>Nilai</span><b>' + esc(ctx.fmtMoney(r.nilai, r.cur)) + '</b></div>' +
-        '<div><span>No. PR</span><span class="mono">' + esc(r.pr || '—') + '</span></div><div><span>No. RO</span>' + (r.roNo ? '<a class="mono" style="cursor:pointer" data-pokey="' + esc(r.doc ? r.doc.c + '/' + r.doc.no : '') + '">' + esc(r.roNo) + '</a>' + (r.auto ? ' <span class="small muted">otomatis dari SAP</span>' : '') : '—') + '</div>' +
-        '<div><span>PIC MIM</span>' + esc(r.pic || '—') + '</div><div><span>Status SAP</span>' + (r.doc ? ctx.pct(r.doc.recv) + ' diterima' + (r.doc.late ? ' · <b style="color:var(--bad)">terlambat</b>' : '') : '—') + '</div></div>' +
+        '<div class="drawer-body">' + stepper(r, true) +
+        (acts.length ? '<div class="toolbar">' + acts.join('') + '</div>' : '') +
+        '<div class="kv"><div><span>Diajukan</span>' + esc(r.by || '') + ' · ' + ctx.fmtDateTime(r.at) + '</div><div><span>Untuk field</span>' + esc(r.plant ? plantLabel(r.plant) + ' · ' + r.plant : '—') + '</div>' +
+        '<div><span>Approval MIM</span>' + (r.appr ? esc(r.appr.by) + ' · ' + ctx.fmtDateTime(r.appr.at) : r.rej ? '<b style="color:var(--bad)">Ditolak</b> ' + esc(r.rej.by) + (r.rej.reason ? ' — ' + esc(r.rej.reason) : '') : r.pr || r.ro ? '—' : 'menunggu') + '</div><div><span>Dibutuhkan</span>' + (r.need ? ctx.fmtDate(r.need) : '—') + '</div>' +
+        '<div><span>No. PR</span><b class="mono">' + esc(r.pr || '—') + '</b>' + (r.pr ? ' · ' + (r.prSt === 'rel' ? 'terbit' : 'need approval') : '') + '</div>' +
+        '<div><span>No. RO</span>' + (r.roNo ? '<a class="mono" style="cursor:pointer" data-pokey="' + esc(r.doc ? r.doc.c + '/' + r.doc.no : '') + '">' + esc(r.roNo) + '</a>' + (r.auto ? ' <span class="small muted">otomatis dari SAP</span>' : '') : '—') + '</div>' +
+        '<div><span>Vendor</span>' + esc(r.vendor || '—') + '</div><div><span>Nilai</span><b>' + esc(ctx.fmtMoney(r.nilai, r.cur)) + '</b></div>' +
+        '<div><span>Delivery date</span>' + (r.deliv ? ctx.fmtDate(r.deliv) + (r.doc ? ' <span class="small muted">(SAP)</span>' : '') : '—') + '</div><div><span>Penerimaan</span>' + (r.doc ? ctx.pct(r.doc.recv) + ' diterima' + (r.late ? ' · <b style="color:var(--bad)">terlambat</b>' : '') : r.state === 'Selesai' ? 'Selesai (manual)' : '—') + '</div>' +
+        '<div><span>PIC MIM</span>' + esc(r.pic || '—') + '</div></div>' +
         (r.note ? '<div class="mk-note">' + esc(r.note).replace(/\n/g, '<br>') + '</div>' : '') +
-        (w ? '<div><button class="btn primary" data-act="ro-upd" data-id="' + esc(r.id) + '">' + ICON.edit + ' Update PR / RO</button></div>' : '') +
         '<div><h3 class="section-title">Item <span class="badge">' + r.items.length + '</span></h3><div class="table-wrap" style="box-shadow:none"><table class="grid"><thead><tr><th>Material</th><th class="num">Qty</th><th class="num">Harga</th><th class="num">Nilai</th></tr></thead><tbody>' +
         r.items.map(function (i) { return '<tr><td><div class="mat-code">' + esc(i.m) + ' · item ' + esc(i.item) + '</div><div style="font-weight:600">' + esc(i.d) + '</div></td><td class="num nowrap">' + fmtQ(i.qty) + ' ' + esc(i.u) + '</td><td class="num nowrap">' + esc(ctx.fmtMoney(i.price, r.cur)) + '</td><td class="num nowrap"><b>' + esc(ctx.fmtMoney(i.qty * i.price, r.cur)) + '</b></td></tr>'; }).join('') + '</tbody></table></div></div>' +
         '<div><h3 class="section-title">Riwayat</h3><div class="mk-log">' + (r.log || []).map(function (l) { return '<div class="mk-log-row"><span>' + esc(l.msg) + '</span><span class="small muted nowrap">' + esc(l.by) + ' · ' + ctx.fmtDateTime(l.at) + '</span></div>'; }).join('') + '</div></div></div>';
       d.classList.add('open'); $('#scrim').classList.add('open'); d.setAttribute('aria-hidden', 'false');
     }
-    async function update(id) {
-      var r = roList().filter(function (y) { return y.id === id; })[0]; if (!r) return;
-      var m = await ctx.modal('Update Permintaan RO — OA ' + r.oa,
-        '<div class="small muted" style="margin-bottom:10px">' + r.items.length + ' item · ' + esc(ctx.fmtMoney(r.nilai, r.cur)) + ' · diajukan ' + esc(r.by || '') + '</div>' +
-        '<div class="fleet-form">' + ctx.fld('No. PR', ctx.inp('pr', r.pr, 'placeholder="mis. 1450034567"')) + ctx.fld('No. RO', ctx.inp('ro', r.ro, 'placeholder="kosongkan — otomatis dari ME2N bila PR cocok"')) +
-        ctx.fld('PIC MIM', ctx.inp('pic', r.pic || ctx.me())) + ctx.fld('Status', ctx.sel('status', [['', 'Otomatis (dari PR / RO / SAP)'], 'Selesai', 'Batal'], r.status || '')) +
-        ctx.fld('Catatan', '<textarea class="input" name="note2" rows="2" placeholder="mis. PR sudah di-approve, menunggu RO"></textarea>', 'wide') + '</div>', 'Simpan');
-      if (!m) return;
-      var now = new Date().toISOString(), ch = [];
-      if ((m.pr || '').trim() !== (r.pr || '')) ch.push('PR ' + (m.pr.trim() || '-'));
-      if ((m.ro || '').trim() !== (r.ro || '')) ch.push('RO ' + (m.ro.trim() || '-'));
-      if (m.status !== (r.status || '')) ch.push('status ' + (m.status || 'otomatis'));
-      if ((m.pic || '').trim() !== (r.pic || '')) ch.push('PIC ' + m.pic.trim());
-      var msg = (ch.join(', ') || 'Catatan') + (m.note2.trim() ? ' — ' + m.note2.trim() : '');
-      var ok = await ctx.save(function (D) {
+    function saveReq(id, mut, msg, toastMsg) {
+      var now = new Date().toISOString();
+      return ctx.save(function (D) {
         var x = (D.roReq || []).filter(function (y) { return y.id === id; })[0];
         if (!x) throw new Error('Permintaan sudah dihapus');
-        x.pr = m.pr.trim(); x.ro = m.ro.trim(); x.pic = m.pic.trim(); x.status = m.status; x.ed = { by: ctx.me(), at: now };
+        mut(x, now);
+        x.ed = { by: ctx.me(), at: now };
         x.log = [{ at: now, by: ctx.me(), msg: msg }].concat(x.log || []).slice(0, 40);
-      }, 'Permintaan RO OA ' + r.oa + ': ' + msg);
-      if (ok) { ctx.toast('Permintaan RO diperbarui'); ctx.closeDrawer(); ctx.render(); }
+      }, 'Permintaan RO OA ' + x0(id) + ': ' + msg).then(function (ok) { if (ok) { ctx.toast(toastMsg || 'Permintaan RO diperbarui'); ctx.closeDrawer(); ctx.render(); } return ok; });
+    }
+    function x0(id) { var r = ((S.D && S.D.roReq) || []).filter(function (y) { return y.id === id; })[0]; return r ? r.oa : ''; }
+    async function approve(id) {
+      if (!ctx.canApprove()) return;
+      var r = roList().filter(function (y) { return y.id === id; })[0]; if (!r) return;
+      var m = await ctx.modal('Approve Permintaan RO — OA ' + r.oa, '<div class="small muted" style="margin-bottom:10px">' + r.items.length + ' item · ' + esc(ctx.fmtMoney(r.nilai, r.cur)) + ' · diajukan ' + esc(r.by || '') + '</div>' +
+        '<div class="fleet-form">' + ctx.fld('PIC MIM (pembuat PR)', ctx.inp('pic', r.pic || ctx.me())) + ctx.fld('Catatan', ctx.inp('note2', '', 'placeholder="opsional"')) + '</div>', 'Approve');
+      if (!m) return;
+      saveReq(id, function (x, now) { x.appr = { by: ctx.me(), at: now }; delete x.rej; x.pic = m.pic.trim(); }, 'Disetujui MIM' + (m.pic.trim() ? ' · PIC ' + m.pic.trim() : '') + (m.note2.trim() ? ' — ' + m.note2.trim() : ''), 'Permintaan RO disetujui');
+    }
+    async function reject(id) {
+      if (!ctx.canApprove()) return;
+      var m = await ctx.modal('Tolak Permintaan RO', ctx.fld('Alasan penolakan', '<textarea class="input" name="reason" rows="3" required></textarea>', 'wide'), 'Tolak', { danger: true, validate: function (o) { return o.reason.trim() ? null : 'Isi alasan'; } });
+      if (!m) return;
+      saveReq(id, function (x, now) { x.rej = { by: ctx.me(), at: now, reason: m.reason.trim() }; }, 'Ditolak — ' + m.reason.trim(), 'Permintaan RO ditolak');
+    }
+    async function reopen(id) {
+      saveReq(id, function (x) { delete x.rej; x.status = ''; }, 'Dibuka kembali');
+    }
+    async function del(id) {
+      var r = roList().filter(function (y) { return y.id === id; })[0]; if (!r || !canDel(r)) return;
+      if (!(await ctx.confirmBox('Hapus permintaan RO?', 'Permintaan RO OA <b>' + esc(r.oa) + '</b> (' + r.items.length + ' item, ' + esc(ctx.fmtMoney(r.nilai, r.cur)) + ') akan dihapus. Tercatat di History hapus.', 'Hapus'))) return;
+      var ok = await ctx.save(function (D) {
+        D.roReq = (D.roReq || []).filter(function (y) { return y.id !== id; });
+        ctx.audit(D, 'Permintaan RO', 'OA ' + r.oa + ' · ' + r.items.length + ' item · ' + ctx.fmtMoney(r.nilai, r.cur) + (r.pr ? ' · PR ' + r.pr : ''), { oa: r.oa, items: r.items, pr: r.pr, ro: r.ro, by: r.by, at: r.at });
+      }, 'Hapus permintaan RO OA ' + r.oa);
+      if (ok) { ctx.toast('Permintaan RO dihapus'); ctx.closeDrawer(); ctx.render(); }
+    }
+    async function update(id) {
+      if (!ctx.canApprove()) return;
+      var r = roList().filter(function (y) { return y.id === id; })[0]; if (!r) return;
+      var m = await ctx.modal('Proses Permintaan RO — OA ' + r.oa,
+        stepper(r, true) + '<div class="small muted" style="margin:10px 0">' + r.items.length + ' item · ' + esc(ctx.fmtMoney(r.nilai, r.cur)) + ' · ' + esc(r.vendor || '') + '</div>' +
+        '<div class="fleet-form">' + ctx.fld('No. PR', ctx.inp('pr', r.pr, 'placeholder="mis. 1400003780"')) + ctx.fld('Status PR', ctx.sel('prSt', [['need', 'Need approval'], ['rel', 'PR terbit (approved)']], r.prSt || 'need')) +
+        ctx.fld('No. RO', ctx.inp('ro', r.ro, 'placeholder="' + (r.auto ? 'otomatis: ' + esc(r.roNo) : 'kosongkan bila belum terbit') + '"')) +
+        ctx.fld('Delivery date / ETA', ctx.inp('deliv', r.ro || !r.doc ? r.deliv : '', 'type="date"' + (r.doc ? ' title="diambil dari SAP bila RO ada di ME2N"' : ''))) +
+        ctx.fld('PIC MIM', ctx.inp('pic', r.pic || ctx.me())) + ctx.fld('Status khusus', ctx.sel('status', [['', '— otomatis —'], ['Selesai', 'Selesai (diterima, di luar SAP)'], ['Batal', 'Batal']], r.status || '')) +
+        ctx.fld('Catatan', '<textarea class="input" name="note2" rows="2" placeholder="mis. RO dikirim ke vendor, ETA dikonfirmasi"></textarea>', 'wide') + '</div>' +
+        '<p class="small muted" style="margin:8px 0 0">RO &amp; delivery date terisi otomatis bila No. PR ditemukan di data ME2N.</p>', 'Simpan');
+      if (!m) return;
+      var ch = [];
+      if (m.pr.trim() !== (r.pr || '')) ch.push('PR ' + (m.pr.trim() || '-'));
+      if (m.pr.trim() && m.prSt !== (r.prSt || 'need')) ch.push(m.prSt === 'rel' ? 'PR terbit' : 'PR need approval');
+      if (m.ro.trim() !== (r.ro || '')) ch.push('RO ' + (m.ro.trim() || '-'));
+      if ((m.deliv || '') !== (r.ro || !r.doc ? r.deliv || '' : '')) ch.push('delivery ' + (m.deliv || '-'));
+      if (m.status !== (r.status || '')) ch.push(m.status || 'status otomatis');
+      if (m.pic.trim() !== (r.pic || '')) ch.push('PIC ' + m.pic.trim());
+      var msg = (ch.join(', ') || 'Catatan') + (m.note2.trim() ? ' — ' + m.note2.trim() : '');
+      saveReq(id, function (x) {
+        x.pr = m.pr.trim(); x.prSt = m.prSt; x.ro = m.ro.trim(); x.deliv = m.deliv; x.pic = m.pic.trim(); x.status = m.status;
+        if (!x.appr && (x.pr || x.ro)) x.appr = { by: ctx.me(), at: new Date().toISOString() };
+      }, msg);
     }
 
     // ================= Stok & pemakaian dari Warehouse =================
@@ -367,7 +447,7 @@
       var t = e.target, b;
       if ((b = t.closest('[data-oaact]'))) { V.active = !V.active; V.n = PAGE; render(); return; }
       if ((b = t.closest('[data-rof]'))) { V.f = b.getAttribute('data-rof'); var x = curOA(); if (x) pickTable(x); return; }
-      if ((b = t.closest('[data-rost]'))) { V.rst = b.getAttribute('data-rost'); var bx = $('#prBox'); if (bx) renderTab(bx); return; }
+      if ((b = t.closest('[data-rost]'))) { V.rst = b.getAttribute('data-rost'); ctx.closeDrawer(); var bx = $('#prBox'); if (bx) renderTab(bx); return; }
       if ((b = t.closest('[data-rosug]'))) { var x2 = curOA(), k = b.getAttribute('data-rosug'), it = x2 && x2.o.items.filter(function (y) { return y[0] === k; })[0], inf = it && itemInfo(x2.c, it); if (inf) { selFor(x2.c + ':' + x2.no).items[k] = inf.sg.sug; saveSel(); pickTable(x2); } return; }
       b = t.closest('[data-act]');
       if (b) {
@@ -376,8 +456,13 @@
         else if (a === 'ro-submit') submit(b.getAttribute('data-key'));
         else if (a === 'ro-clear') { sel.items = {}; saveSel(); var x3 = curOA(); if (x3) pickTable(x3); }
         else if (a === 'ro-upd') { e.stopPropagation(); update(b.getAttribute('data-id')); }
+        else if (a === 'ro-appr') { e.stopPropagation(); approve(b.getAttribute('data-id')); }
+        else if (a === 'ro-rej') { e.stopPropagation(); reject(b.getAttribute('data-id')); }
+        else if (a === 'ro-del') { e.stopPropagation(); del(b.getAttribute('data-id')); }
+        else if (a === 'ro-reopen') { e.stopPropagation(); reopen(b.getAttribute('data-id')); }
+        else if (a === 'ro-open') { e.stopPropagation(); openReq(b.getAttribute('data-id')); }
         else if (a === 'stok-refresh') refresh();
-        if (/^(oa2-more|ro-submit|ro-clear|ro-upd|stok-refresh)$/.test(a)) return;
+        if (/^(oa2-more|ro-submit|ro-clear|ro-upd|ro-appr|ro-rej|ro-del|ro-reopen|ro-open|stok-refresh)$/.test(a)) return;
       }
       if (t.closest('a,button,input,select,textarea')) return;
       var tr = t.closest('tr[data-roreq]');
@@ -423,7 +508,7 @@
       }
     });
 
-    return { render: render, renderDetail: renderDetail, renderTab: renderTab, openReq: openReq, roList: roList, waiting: waiting, load: load, stokCard: stokCard, exportRows: exportRows, PG_LABEL: PG_LABEL };
+    return { stepper: stepper, stBadge: stBadge, render: render, renderDetail: renderDetail, renderTab: renderTab, openReq: openReq, roList: roList, waiting: waiting, load: load, stokCard: stokCard, exportRows: exportRows, PG_LABEL: PG_LABEL };
   }
   root.OaMod = OaMod;
 })(this);

@@ -40,7 +40,9 @@ Menu **Upload Data** → pilih beberapa file sekaligus. Jenis file & client dide
 
 - **Kontrak OA** menampilkan kontrak **Zona 1 (PG X07)** dan **Regional 1 (PG X02)**; PG lain (X03, X10) lewat pilihan "Other". Kartu per OA: masa berlaku, item pernah dipakai / stok habis di field, sisa nilai, saran RO.
 - **Detail OA → Pilih item yang perlu di-RO**: stok field (Rantau/Lirik/Jambi/Pangkalan Susu), stok Zona 1 lain, pemakaian 12 bulan, **saran qty** = pemakaian/bulan × (cover + lead time) − stok (sama dengan Material Warehouse; cover & lead time di Pengaturan). Centang item → **Ajukan Permintaan RO**.
-- **Progres PR & PO → Permintaan RO**: MIM mengisi No. PR (dan No. RO bila sudah ada). Status otomatis: Menunggu PR → PR dibuat → RO terbit → Diterima. RO terhubung otomatis bila No. PR ditemukan di data ME2N.
+- **Alur Progres PR & PO**: Pengadaan Kontrak (tender) → Kontrak OA → **Permintaan RO** (diajukan dari detail OA) → **Approval MIM** → **PR** (need approval → terbit) → **RO terbit** → delivery (Expediting) → **Diterima**. RO & delivery date terhubung otomatis bila No. PR ditemukan di ME2N; RO yang terbit ikut tampil di tab Expediting.
+- **Peran MIM**: approve / tolak permintaan RO dan memproses PR & RO (Owner Utama juga bisa). Pengaju bisa menghapus permintaannya selama belum di-approve; MIM / Owner Utama bisa menghapus kapan saja (tercatat di History hapus).
+- **Expediting** dilengkapi otomatis dari ME2N bila kolom di file progres kosong (vendor, No. PR, delivery date, nilai) — ditandai label **SAP**.
 - Stok & pemakaian diambil dari website Material Warehouse (**Data SAP → Perbarui dari Warehouse**, perlu akun Warehouse) dan disimpan terenkripsi di `data/stok.js` hanya untuk material yang ada di kontrak OA.
 
 ## Kontrak Warehouse & GS (per Field)
