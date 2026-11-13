@@ -49,5 +49,15 @@ window.MK_USERS = [
   "wk": "nk1owEsBM90bzghm1XHsJYBA9dHA5ZyVehr7Ty1KNSQ+/UvlWck4AH1oR3CDFKIy",
   "aiv": "KdGIFYyTk7SwIQaB",
   "ak": "uxRPoVC6V3ALY8x5XOstDmQX3Ks406In9cTmZYjPTKu7Z1RiwLN4CiCqN1L69W1I"
+ },
+ {
+  "id": "7a15166bad59f51ce264c5dce6a384ad8d5dca54b11b8caafda7b5a98406ab98",
+  "name": "Devy",
+  "role": "writer",
+  "salt": "N8Ed75URomn86btPwwu1hw==",
+  "iv": "1CVVVYP6CVfpbhjE",
+  "wk": "Z8gCdPm8mquvlSFQM58UyzVI5DQgqsX/Gezhk3ZqWQgeS8kXFZSxN24/awhKr0fr",
+  "aiv": "8EpT2VmYCdtAu7DQ",
+  "ak": "Lb7OwNzXKSBZ8p8uFDPyp42GlfAvDFawt7mELYnc9mK6yAZ8idtS41fTuqYdQ9WE"
  }
 ];
