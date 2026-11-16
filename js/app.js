@@ -1,5 +1,5 @@
 /*
- * Monitoring Kontrak — aplikasi utama (tampilan & interaksi)
+ * CONTRACK (Contract Tracking & Control) — aplikasi utama (tampilan & interaksi)
  * Desain & sistem login sama dengan website Material Warehouse (Warehouse-SCM).
  */
 (function () {
@@ -69,8 +69,8 @@
     arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
   };
 
-  var APP_VERSION = '20261113a'; // samakan dengan ?v= di index.html setiap rilis
-  var DEFAULT_REPO = 'StackGeefer/Monitoring-Kontrak';
+  var APP_VERSION = '20261116a'; // samakan dengan ?v= di index.html setiap rilis
+  var DEFAULT_REPO = 'StackGeefer/CONTRACK';
   var HERO = [{ path: 'assets/hero/pertamina-1-kilang.jpg', pos: '74% 40%' }, { path: 'assets/hero/pertamina-2-gudang.jpg', pos: '30% 60%' }];
   var ROLE_LABEL = { owner: 'Owner Utama', writer: 'Owner', mim: 'MIM', viewer: 'Reader' };
   var DOC_CATS = ['Kontrak', 'Amandemen', 'Jaminan Pelaksanaan', 'BAPP / BAST', 'Invoice', 'Korespondensi', 'Lainnya'];
@@ -262,7 +262,7 @@
   function showLogin(err) {
     var el = $('#login');
     el.classList.add('photo');
-    el.innerHTML = heroHtml('Monitoring', 'Kontrak') +
+    el.innerHTML = heroHtml('CONTRACK', 'Contract Tracking &amp; Control') +
       '<div class="login-side"><form class="login-card" id="loginForm" autocomplete="on">' +
       '<div class="lc-logo">' + Brand.mark() + '</div>' +
       '<h2>Selamat datang</h2><p class="muted">Masuk dengan akun yang diberikan Owner.</p>' +
@@ -285,7 +285,7 @@
   function showSetup(err) {
     var el = $('#login');
     el.classList.add('photo');
-    el.innerHTML = heroHtml('Monitoring', 'Kontrak') +
+    el.innerHTML = heroHtml('CONTRACK', 'Contract Tracking &amp; Control') +
       '<div class="login-side"><form class="login-card setup-card" id="setupForm" autocomplete="off">' +
       '<div class="lc-logo">' + Brand.mark() + '</div>' +
       '<h2>Setup awal</h2><p class="muted">Website belum punya pengguna. Buat akun <b>Owner Utama</b> dan hubungkan ke repo GitHub <span class="mono">' + esc(GH.repo()) + '</span>.</p>' +
@@ -325,10 +325,10 @@
       var files = {
         'data/users.js': Vault.usersFile([owner]),
         'data/admin.js': adminFile(tokEnc),
-        'data/kontrak.js': Vault.encFile('MK_DATA', await Vault.encrypt(key, D), 'Data Monitoring Kontrak')
+        'data/kontrak.js': Vault.encFile('MK_DATA', await Vault.encrypt(key, D), 'Data CONTRACK')
       };
       loading('Menyimpan ke GitHub…');
-      await GH.commit(files, [], 'Setup awal Monitoring Kontrak: akun Owner ' + u);
+      await GH.commit(files, [], 'Setup awal CONTRACK: akun Owner ' + u);
       S.key = key; S.adminKey = ak; S.users = [owner]; S.D = D;
       window.MK_ADMIN = { tok: tokEnc };
       sessionSet({ user: S.user, key: Vault.toB64(key), ak: Vault.toB64(ak) }, true);
@@ -408,7 +408,7 @@
     loading((extra && extra.loading) || 'Menyimpan…');
     try {
       var next = await GH.atomic({
-        path: 'data/kontrak.js', varName: 'MK_DATA', note: 'Data Monitoring Kontrak', key: S.key,
+        path: 'data/kontrak.js', varName: 'MK_DATA', note: 'Data CONTRACK', key: S.key,
         message: message + ' (' + me() + ')', files: extra && extra.files, deletes: extra && extra.deletes,
         mutate: function (cur) {
           var D = cur || Model.emptyData();
@@ -1006,7 +1006,7 @@
       XLSX.utils.book_append_sheet(wb, ws, 'Kontrak');
       if (rl.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rl), 'Realisasi');
       if (am.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(am), 'Amandemen');
-      XLSX.writeFile(wb, 'Monitoring-Kontrak-' + Model.todayStr() + '.xlsx');
+      XLSX.writeFile(wb, 'CONTRACK-' + Model.todayStr() + '.xlsx');
     } catch (e) { toast('Gagal export: ' + e.message, true); }
     finally { loading(false); }
   }
@@ -1331,7 +1331,7 @@
       '<p class="muted small" style="margin-top:0">Agar data yang disimpan langsung tampil untuk semua pengguna.</p>' +
       '<div class="toolbar" style="margin-bottom:10px"><span>Status:</span>' + (GH.hasToken() ? '<span class="badge ok">Terhubung ke ' + esc(GH.repo()) + '</span>' : '<span class="badge warn">Belum terhubung</span>') + '</div>' +
       '<ol class="steps small"><li>Buka <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub › Fine-grained token baru</a> (login sebagai pemilik repo).</li>' +
-      '<li>Isi <b>Token name</b> bebas (mis. "Monitoring Kontrak"), <b>Expiration</b> → <i>Custom</i> ±1 tahun.</li>' +
+      '<li>Isi <b>Token name</b> bebas (mis. "CONTRACK"), <b>Expiration</b> → <i>Custom</i> ±1 tahun.</li>' +
       '<li><b>Repository access</b> → <i>Only select repositories</i> → pilih <b>' + esc(GH.repo().split('/')[1]) + '</b>.</li>' +
       '<li><b>Permissions › Repository permissions › Contents</b> → <b>Read and write</b>.</li>' +
       '<li>Klik <b>Generate token</b>, salin token (diawali <span class="mono">github_pat_</span>), tempel di bawah lalu klik <b>Simpan &amp; Tes</b>.</li></ol>' +
@@ -1376,7 +1376,7 @@
         : '<p class="small muted" style="margin:0">Belum ada data yang dihapus.</p>')) : '';
 
     view.innerHTML = '<div class="mk-settings">' + top + users + ghCard + sapCard + remind + whCard + auditCard + '</div>' +
-      '<div class="small muted" style="margin-top:16px">Monitoring Kontrak · versi ' + APP_VERSION + ' · data terakhir disimpan ' + esc(S.D.updatedBy || '—') + ' · ' + fmtDateTime(S.D.updatedAt) + '</div>';
+      '<div class="small muted" style="margin-top:16px">CONTRACK — Contract Tracking &amp; Control · versi ' + APP_VERSION + ' · data terakhir disimpan ' + esc(S.D.updatedBy || '—') + ' · ' + fmtDateTime(S.D.updatedAt) + '</div>';
     collapseSettings(view.querySelector('.mk-settings'));
   }
   // Setiap kartu (kecuali akun) jadi bagian buka-tutup; status buka diingat di browser (sama seperti Material Warehouse)

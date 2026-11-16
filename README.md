@@ -1,10 +1,10 @@
-# Monitoring Kontrak
+# CONTRACK — Contract Tracking & Control
 
 **SCM Warehouse & Distribution** · Desain & sistem login sama dengan website [Material Warehouse](https://stackgeefer.github.io/Warehouse-SCM/)
 
 Website untuk memantau seluruh kontrak / OA: **masa berlaku & jatuh tempo**, **serapan nilai (realisasi)**, **amandemen**, **jaminan pelaksanaan**, **dokumen kontrak**, dan **rencana tindak lanjut** (amandemen / pengadaan ulang) sebelum kontrak habis.
 
-🌐 Website: **https://stackgeefer.github.io/Monitoring-Kontrak/**
+🌐 Website: **https://stackgeefer.github.io/CONTRACK/**
 
 ---
 
@@ -16,7 +16,7 @@ Akun Owner Utama **Gerald.samosir** sudah dibuat (password sama dengan website M
 2. Login di website sebagai Gerald.samosir.
 3. Buat token GitHub: https://github.com/settings/personal-access-tokens/new
    - **Expiration** → *Custom* → ±1 tahun
-   - **Repository access** → *Only select repositories* → `Monitoring-Kontrak`
+   - **Repository access** → *Only select repositories* → `CONTRACK`
    - **Permissions → Contents** → *Read and write* → **Generate token**
 4. Di website: **Pengaturan → Koneksi GitHub** → tempel token → **Simpan & Tes**. Selama token belum diisi, website hanya bisa dilihat (belum bisa menyimpan).
 
@@ -82,7 +82,7 @@ Di menu **PO / RO (ME2N)** klik dokumen → bagian **Update status dari MIM**: s
 
 ## Terhubung dengan Material Warehouse
 
-| Dari Monitoring Kontrak | Ke Material Warehouse |
+| Dari CONTRACK | Ke Material Warehouse |
 |---|---|
 | Tombol **Material di Warehouse ↗** di detail OA | Halaman *Kontrak (OA/RO)* nomor OA tersebut (daftar material yang bisa ditarik) |
 | **Import → Ambil data ME3N Warehouse** | Membaca data ME3N terenkripsi yang sudah di-upload di Warehouse — tanpa upload ulang. Otomatis bila sedang login Warehouse di browser yang sama; bila tidak, diminta login akun Warehouse sekali. |
@@ -98,7 +98,7 @@ Website statis (GitHub Pages, tanpa server/database). Setiap simpan = satu commi
 ```
 index.html            Halaman utama
 css/style.css         Tampilan (sama dengan Material Warehouse)
-css/kontrak.css       Komponen khusus Monitoring Kontrak
+css/kontrak.css       Komponen khusus CONTRACK
 js/app.js             Halaman, login, simpan
 js/model.js           Status, sisa waktu, serapan nilai, peringatan, agregasi ME3N
 js/vault.js           Enkripsi & pengguna

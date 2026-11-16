@@ -121,7 +121,7 @@
 
   // ---------- Isi file data/*.js ----------
   function usersFile(users) {
-    return '/* Pengguna Monitoring Kontrak. Hanya hash username & kunci terenkripsi — tidak ada password. */\n' +
+    return '/* Pengguna CONTRACK. Hanya hash username & kunci terenkripsi — tidak ada password. */\n' +
       'window.MK_USERS = ' + JSON.stringify(users, null, 1) + ';\n';
   }
   function encFile(varName, payload, note) {

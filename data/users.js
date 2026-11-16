@@ -1,4 +1,4 @@
-/* Pengguna Monitoring Kontrak. Hanya hash username & kunci terenkripsi — tidak ada password. */
+/* Pengguna CONTRACK. Hanya hash username & kunci terenkripsi — tidak ada password. */
 window.MK_USERS = [
  {
   "id": "1c37b1ce4505c7db268f1d996ea6f0eb88c76a9887ae5e6b4b24739f99a19091",
