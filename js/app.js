@@ -1,5 +1,5 @@
 /*
- * CONTRACK (Contract Tracking & Control) — aplikasi utama (tampilan & interaksi)
+ * CONTRACK (Contract Tracking and Material Control) — aplikasi utama (tampilan & interaksi)
  * Desain & sistem login sama dengan website Material Warehouse (Warehouse-SCM).
  */
 (function () {
@@ -69,7 +69,7 @@
     arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
   };
 
-  var APP_VERSION = '20261116a'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261120a'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/CONTRACK';
   var HERO = [{ path: 'assets/hero/pertamina-1-kilang.jpg', pos: '74% 40%' }, { path: 'assets/hero/pertamina-2-gudang.jpg', pos: '30% 60%' }];
   var ROLE_LABEL = { owner: 'Owner Utama', writer: 'Owner', mim: 'MIM', viewer: 'Reader' };
@@ -262,7 +262,7 @@
   function showLogin(err) {
     var el = $('#login');
     el.classList.add('photo');
-    el.innerHTML = heroHtml('CONTRACK', 'Contract Tracking &amp; Control') +
+    el.innerHTML = heroHtml('CONTRACK', 'Contract Tracking and Material Control') +
       '<div class="login-side"><form class="login-card" id="loginForm" autocomplete="on">' +
       '<div class="lc-logo">' + Brand.mark() + '</div>' +
       '<h2>Selamat datang</h2><p class="muted">Masuk dengan akun yang diberikan Owner.</p>' +
@@ -285,7 +285,7 @@
   function showSetup(err) {
     var el = $('#login');
     el.classList.add('photo');
-    el.innerHTML = heroHtml('CONTRACK', 'Contract Tracking &amp; Control') +
+    el.innerHTML = heroHtml('CONTRACK', 'Contract Tracking and Material Control') +
       '<div class="login-side"><form class="login-card setup-card" id="setupForm" autocomplete="off">' +
       '<div class="lc-logo">' + Brand.mark() + '</div>' +
       '<h2>Setup awal</h2><p class="muted">Website belum punya pengguna. Buat akun <b>Owner Utama</b> dan hubungkan ke repo GitHub <span class="mono">' + esc(GH.repo()) + '</span>.</p>' +
@@ -1376,7 +1376,7 @@
         : '<p class="small muted" style="margin:0">Belum ada data yang dihapus.</p>')) : '';
 
     view.innerHTML = '<div class="mk-settings">' + top + users + ghCard + sapCard + remind + whCard + auditCard + '</div>' +
-      '<div class="small muted" style="margin-top:16px">CONTRACK — Contract Tracking &amp; Control · versi ' + APP_VERSION + ' · data terakhir disimpan ' + esc(S.D.updatedBy || '—') + ' · ' + fmtDateTime(S.D.updatedAt) + '</div>';
+      '<div class="small muted" style="margin-top:16px">CONTRACK — Contract Tracking and Material Control · versi ' + APP_VERSION + ' · data terakhir disimpan ' + esc(S.D.updatedBy || '—') + ' · ' + fmtDateTime(S.D.updatedAt) + '</div>';
     collapseSettings(view.querySelector('.mk-settings'));
   }
   // Setiap kartu (kecuali akun) jadi bagian buka-tutup; status buka diingat di browser (sama seperti Material Warehouse)

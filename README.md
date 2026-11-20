@@ -1,4 +1,4 @@
-# CONTRACK — Contract Tracking & Control
+# CONTRACK — Contract Tracking and Material Control
 
 **SCM Warehouse & Distribution** · Desain & sistem login sama dengan website [Material Warehouse](https://stackgeefer.github.io/Warehouse-SCM/)
 
